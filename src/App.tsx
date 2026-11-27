@@ -97,7 +97,7 @@ function SalesDispatchModule(){
  const [dispatchWeight,setDispatchWeight]=useState('');const [acceptedWeight,setAcceptedWeight]=useState('');const [rate,setRate]=useState('');
  const [vehicleNumber,setVehicleNumber]=useState('');const [driverName,setDriverName]=useState('');const [driverMobile,setDriverMobile]=useState('');const [notes,setNotes]=useState('');
  const selected=lots.find(l=>l.id===stockLotId);
- const load=async()=>{setLoading(true);setError('');try{const r=await fetch('/api/sales-dispatch');const d=await r.json();if(!r.ok)throw new Error(d.error||'बिक्री डेटा लोड नहीं हुआ');setMillers(d.millers||[]);setLots(d.lots||[]);setSales(d.sales||[]);if(!stockLotId&&d.lots?.[0])setStockLotId(d.lots[0].id);}catch(e){setError(e instanceof Error?e.message:'डेटा लोड नहीं हुआ');}finally{setLoading(false);}};
+ const load=async()=>{setLoading(true);setError('');try{const r=await fetch('/api/sales-dispatch');const d=await r.json();if(!r.ok)throw new Error(d.error||'बिक्री डेटा लोड नहीं हुआ');setMillers(d.millers||[]);setLots(d.lots||[]);setSales(d.sales||[]);if(!stockLotId||!(d.lots||[]).some((l:any)=>l.id===stockLotId))setStockLotId(d.lots?.[0]?.id||'');}catch(e){setError(e instanceof Error?e.message:'डेटा लोड नहीं हुआ');}finally{setLoading(false);}};
  useEffect(()=>{load();},[]);
  const q=(kg:number)=>((Number(kg)||0)/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
  const amount=(Number(acceptedWeight)||0)*(Number(rate)||0);
