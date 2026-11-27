@@ -29,7 +29,7 @@ export async function onRequestGet({request,env}){
     FROM deals d JOIN parties pa ON pa.id=d.miller_id AND pa.shop_id=d.shop_id
     JOIN crops c ON c.id=d.crop_id AND c.shop_id=d.shop_id
     JOIN (SELECT deal_id,SUM(gross_amount) AS sale_amount FROM sales GROUP BY deal_id) sa ON sa.deal_id=d.id
-    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='miller_sale_receipt' AND status='completed' GROUP BY deal_id) pm ON pm.deal_id=d.id
+    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='miller_payment' AND (notes IS NULL OR notes NOT LIKE '[commission_receipt]%') AND status='completed' GROUP BY deal_id) pm ON pm.deal_id=d.id
     WHERE d.shop_id=? AND sa.sale_amount>COALESCE(pm.paid,0)
     GROUP BY d.id,pa.name,c.name ORDER BY d.deal_date DESC LIMIT 300`).bind(user.shopId,user.shopId).all(),
    env.DB.prepare(`SELECT d.id AS deal_id,d.deal_no,d.deal_date,d.miller_id AS party_id,pa.name AS party_name,
@@ -37,10 +37,10 @@ export async function onRequestGet({request,env}){
     FROM commission_calculations cc JOIN deals d ON d.id=cc.deal_id AND d.shop_id=cc.shop_id
     JOIN parties pa ON pa.id=d.miller_id AND pa.shop_id=d.shop_id
     JOIN crops c ON c.id=d.crop_id AND c.shop_id=d.shop_id
-    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='commission_receipt' AND status='completed' GROUP BY deal_id) pm ON pm.deal_id=d.id
+    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='miller_payment' AND notes LIKE '[commission_receipt]%' AND status='completed' GROUP BY deal_id) pm ON pm.deal_id=d.id
     WHERE cc.shop_id=? AND cc.total_commission>COALESCE(pm.paid,0)
     GROUP BY d.id,pa.name,c.name ORDER BY d.deal_date DESC LIMIT 300`).bind(user.shopId,user.shopId).all(),
-   env.DB.prepare(`SELECT p.id,p.payment_no,p.payment_date,p.payment_type,p.amount,p.payment_method,p.transaction_reference,
+   env.DB.prepare(`SELECT p.id,p.payment_no,p.payment_date,CASE WHEN p.payment_type='miller_payment' THEN CASE WHEN p.notes LIKE '[commission_receipt]%' THEN 'commission_receipt' ELSE 'miller_sale_receipt' END ELSE p.payment_type END AS payment_type,p.amount,p.payment_method,p.transaction_reference,
     p.status,p.notes,pa.name AS party_name,d.deal_no
     FROM payments p JOIN parties pa ON pa.id=p.party_id AND pa.shop_id=p.shop_id
     LEFT JOIN deals d ON d.id=p.deal_id AND d.shop_id=p.shop_id
@@ -57,6 +57,8 @@ export async function onRequestPost({request,env}){
  let b;try{b=await request.json();}catch{return json({ok:false,error:"Invalid request."},400);}
  const dealId=clean(b.dealId,80),partyId=clean(b.partyId,80),type=clean(b.paymentType,40),method=clean(b.paymentMethod,20);
  const amount=round2(b.amount),date=clean(b.paymentDate,10),reference=clean(b.transactionReference,100),notes=clean(b.notes,500);
+ const dbType=(type==='miller_sale_receipt'||type==='commission_receipt')?'miller_payment':type;
+ const storedNotes=type==='commission_receipt'?'[commission_receipt] '+notes:notes;
  if(!dealId||!partyId||!TYPES.has(type)||!METHODS.has(method)||!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date))return json({ok:false,error:"पार्टी, डील, भुगतान प्रकार, तारीख, तरीका और सही रकम भरें।"},400);
  try{
   const deal=await env.DB.prepare(`SELECT d.id,d.deal_no,d.deal_type,d.farmer_id,d.miller_id
@@ -72,13 +74,13 @@ export async function onRequestPost({request,env}){
    if(type==="miller_sale_receipt"){
     const [s,p]=await Promise.all([
      env.DB.prepare("SELECT COALESCE(SUM(gross_amount),0) AS total FROM sales s JOIN deals d ON d.id=s.deal_id WHERE d.shop_id=? AND s.deal_id=?").bind(user.shopId,dealId).first(),
-     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='miller_sale_receipt' AND status='completed'").bind(user.shopId,dealId).first()
+     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='miller_payment' AND (notes IS NULL OR notes NOT LIKE '[commission_receipt]%') AND status='completed'").bind(user.shopId,dealId).first()
     ]);
     due=Number(s?.total||0)-Number(p?.total||0);partyAccountCode="1101";partyAccountName="Miller Sales Receivable";partyAccountType="asset";
    }else{
     const [s,p]=await Promise.all([
      env.DB.prepare("SELECT COALESCE(SUM(total_commission),0) AS total FROM commission_calculations WHERE shop_id=? AND deal_id=?").bind(user.shopId,dealId).first(),
-     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='commission_receipt' AND status='completed'").bind(user.shopId,dealId).first()
+     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='miller_payment' AND notes LIKE '[commission_receipt]%' AND status='completed'").bind(user.shopId,dealId).first()
     ]);
     due=Number(s?.total||0)-Number(p?.total||0);partyAccountCode="1105";partyAccountName="Miller Commission Receivable";partyAccountType="asset";
    }
@@ -99,7 +101,7 @@ export async function onRequestPost({request,env}){
   const paymentInsert=env.DB.prepare(`INSERT INTO payments
    (id,shop_id,party_id,deal_id,payment_no,payment_date,payment_type,amount,payment_method,transaction_reference,status,notes)
    SELECT ?,?,?,?,?,?,?,?, ?,?,'completed',?
-   WHERE EXISTS (SELECT 1 FROM deals WHERE id=? AND shop_id=?)${type==="farmer_payment"?" AND changes()>0":""}`).bind(id,user.shopId,partyId,dealId,paymentNo,date,type,amount,method,reference||null,notes||null,dealId,user.shopId);
+   WHERE EXISTS (SELECT 1 FROM deals WHERE id=? AND shop_id=?)${type==="farmer_payment"?" AND changes()>0":""}`).bind(id,user.shopId,partyId,dealId,paymentNo,date,dbType,amount,method,reference||null,storedNotes||null,dealId,user.shopId);
   const statements=[];
   if(type==="farmer_payment"){
    statements.push(env.DB.prepare(`UPDATE purchases SET paid_amount=paid_amount+?,balance_amount=MAX(0,balance_amount-?)
