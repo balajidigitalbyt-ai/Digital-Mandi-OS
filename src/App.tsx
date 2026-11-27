@@ -225,12 +225,13 @@ function LedgerModule(){
  useEffect(()=>{load();},[]);
  const fmt=(n:number)=>money(Number(n)||0);
  const difference=Math.abs((Number(data.totals?.debit)||0)-(Number(data.totals?.credit)||0));
+ const unbalancedEntries=(data.unbalanced||[]).filter((j:any)=>Math.round(Math.abs((Number(j.debit)||0)-(Number(j.credit)||0))*100)/100>0 || Number(j.line_count||0)<2);
  return <section className="purchase-workspace">
   <div className="metrics">
    <Metric title="कुल डेबिट" value={fmt(data.totals?.debit)} change="Posted Journals" note="सभी खातों का कुल Debit" icon={<ArrowDownLeft/>} tone="blue"/>
    <Metric title="कुल क्रेडिट" value={fmt(data.totals?.credit)} change="Posted Journals" note="सभी खातों का कुल Credit" icon={<ArrowUpRight/>} tone="green"/>
    <Metric title="Trial Balance अंतर" value={fmt(difference)} change={difference<0.01?'Balanced':'जाँच जरूरी'} note="Debit और Credit का अंतर" icon={<ShieldCheck/>} tone="purple"/>
-   <Metric title="असंतुलित Journal" value={String(data.unbalanced?.length||0)} change="Entry check" note="जहाँ Debit ≠ Credit" icon={<Activity/>} tone="orange"/>
+   <Metric title="असंतुलित Journal" value={String(unbalancedEntries.length)} change="Entry check" note="जहाँ Debit ≠ Credit" icon={<Activity/>} tone="orange"/>
   </div>
   <div className="panel purchase-panel"><div className="party-head"><div><h2>खाता-बही · Trial Balance</h2><p>केवल posted journal entries · D1 से लाइव डेटा</p></div><button className="btn-secondary compact" onClick={load} disabled={loading}>Refresh</button></div>
    {error&&<div className="auth-error">{error}</div>}
@@ -240,7 +241,7 @@ function LedgerModule(){
    <div className="table-wrap"><table><thead><tr><th>पार्टी</th><th>प्रकार</th><th>Debit</th><th>Credit</th><th>नेट बैलेंस (Dr − Cr)</th></tr></thead><tbody>{(data.parties||[]).map((p:any)=><tr key={p.party_id}><td className="party-cell">{p.party_name}</td><td>{p.party_type}</td><td>{fmt(p.debit)}</td><td>{fmt(p.credit)}</td><td className="weight-cell">{fmt(p.balance)}</td></tr>)}</tbody></table>{!loading&&!data.parties?.length?<div className="empty">अभी किसी पार्टी के नाम से Journal posting नहीं है।</div>:null}</div>
   </div>
   <div className="panel purchase-panel"><div className="party-head"><div><h2>Journal जाँच</h2><p>जिन entries में Debit और Credit बराबर नहीं हैं</p></div></div>
-   <div className="table-wrap"><table><thead><tr><th>Entry No.</th><th>तारीख</th><th>विवरण</th><th>Debit</th><th>Credit</th><th>अंतर</th></tr></thead><tbody>{(data.unbalanced||[]).map((j:any)=><tr key={j.id}><td className="id-cell">{j.entry_no}</td><td>{j.entry_date}</td><td>{j.description}</td><td>{fmt(j.debit)}</td><td>{fmt(j.credit)}</td><td className="weight-cell">{fmt(Number(j.debit)-Number(j.credit))}</td></tr>)}</tbody></table>{!loading&&!data.unbalanced?.length?<div className="empty">सभी जाँची गई posted Journal entries संतुलित हैं।</div>:null}</div>
+   <div className="table-wrap"><table><thead><tr><th>Entry No.</th><th>तारीख</th><th>विवरण</th><th>Debit</th><th>Credit</th><th>अंतर</th></tr></thead><tbody>{unbalancedEntries.map((j:any)=><tr key={j.id}><td className="id-cell">{j.entry_no}</td><td>{j.entry_date}</td><td>{j.description}</td><td>{fmt(j.debit)}</td><td>{fmt(j.credit)}</td><td className="weight-cell">{fmt(Number(j.debit)-Number(j.credit))}</td></tr>)}</tbody></table>{!loading&&!unbalancedEntries.length?<div className="empty">सभी जाँची गई posted Journal entries संतुलित हैं।</div>:null}</div>
   </div>
   <p className="auth-hint">नोट: यह Ledger रिपोर्ट journal posting पर आधारित है। Opening balance, purchase/sales posting और पूर्ण balance sheet अभी इस रिपोर्ट में शामिल नहीं हैं।</p>
  </section>;
