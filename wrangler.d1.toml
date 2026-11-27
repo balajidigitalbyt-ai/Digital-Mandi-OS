@@ -1,0 +1,10 @@
+# Dedicated Wrangler config for D1 migrations only.
+# This file is intentionally separate from the Cloudflare Pages project config.
+name = "digital-mandi-os-d1"
+compatibility_date = "2026-11-27"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "digital-mandi-os-db"
+database_id = "7aa701cf-7eea-4333-9671-1484f042bd22"
+migrations_dir = "database/migrations"
