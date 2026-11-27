@@ -27,7 +27,7 @@ export async function onRequestPost({request,env}){
   await env.DB.batch([
    env.DB.prepare("INSERT INTO deals (id,shop_id,deal_no,deal_type,crop_id,farmer_id,deal_date,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?)").bind(dealId,user.shopId,dealNo,mode,cropId,farmerId,date,note,user.id),
    env.DB.prepare("INSERT INTO purchases (id,shop_id,deal_id,farmer_id,crop_id,purchase_date,bags,gross_weight,tare_weight,net_weight,purchase_rate,total_amount,deduction_amount,payable_amount,paid_amount,balance_amount,purchase_mode,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?)").bind(id,user.shopId,dealId,farmerId,cropId,date,bags,gross,tare,net,rate,total,deduction,payable,payable,mode,note),
-   env.DB.prepare("INSERT INTO weighments (id,shop_id,deal_id,party_id,crop_id,weighment_type,weight_quintals,measured_at,notes) VALUES (?,?,?,?,?,'farmer_in',?,?,?)").bind(weighId,user.shopId,dealId,farmerId,cropId,net,now,note),
+   env.DB.prepare("INSERT INTO weighments (id,shop_id,deal_id,party_id,crop_id,weighment_type,weight_quintals,measured_at,notes) VALUES (?,?,?,?,?,'net',?,?,?)").bind(weighId,user.shopId,dealId,farmerId,cropId,net,now,note),
    env.DB.prepare("INSERT INTO stock_lots (id,shop_id,deal_id,crop_id,owner_type,owner_party_id,quantity_kg,available_kg,status) VALUES (?,?,?,?,?,?,?,?, 'available')").bind(stockId,user.shopId,dealId,cropId,ownerType,mode==="commission"?farmerId:null,kg,kg),
    env.DB.prepare("INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values) VALUES (?,?,?,'create','purchase',?,NULL,?)").bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify({dealNo,farmerId,cropId,mode,date,bags,gross,tare,net,rate,total,deduction,payable}))
   ]);
