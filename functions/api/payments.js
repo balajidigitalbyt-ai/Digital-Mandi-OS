@@ -99,7 +99,7 @@ export async function onRequestPost({request,env}){
   const paymentInsert=env.DB.prepare(`INSERT INTO payments
    (id,shop_id,party_id,deal_id,payment_no,payment_date,payment_type,amount,payment_method,transaction_reference,status,notes)
    SELECT ?,?,?,?,?,?,?,?, ?,?,'posted',?
-   WHERE EXISTS (SELECT 1 FROM deals WHERE id=? AND shop_id=?)`).bind(id,user.shopId,partyId,dealId,paymentNo,date,type,amount,method,reference||null,notes||null,dealId,user.shopId);
+   WHERE EXISTS (SELECT 1 FROM deals WHERE id=? AND shop_id=?)${type==="farmer_payment"?" AND changes()>0":""}`).bind(id,user.shopId,partyId,dealId,paymentNo,date,type,amount,method,reference||null,notes||null,dealId,user.shopId);
   const statements=[];
   if(type==="farmer_payment"){
    statements.push(env.DB.prepare(`UPDATE purchases SET paid_amount=paid_amount+?,balance_amount=MAX(0,balance_amount-?)
@@ -117,7 +117,7 @@ export async function onRequestPost({request,env}){
    SELECT ?,?,?,?, ?,? WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')`)
    .bind(crypto.randomUUID(),journalId,firstDebit?partyAccount.id:cashAccount.id,partyId,0,amount,journalId,user.shopId));
   statements.push(env.DB.prepare(`INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values)
-   VALUES (?,?,?,'create','payment',?,NULL,?)`).bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify({paymentNo,dealId,partyId,type,amount,method,date,journalEntryNo:entryNo})));
+   SELECT ?,?,?, 'create','payment',?,NULL,? WHERE EXISTS (SELECT 1 FROM payments WHERE id=? AND shop_id=?)`).bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify({paymentNo,dealId,partyId,type,amount,method,date,journalEntryNo:entryNo}),id,user.shopId));
   const result=await env.DB.batch(statements);
   const paymentIndex=type==="farmer_payment"?1:0;
   if(!result?.[paymentIndex]?.meta?.changes)return json({ok:false,error:"भुगतान सेव नहीं हुआ। बकाया बदल चुका हो सकता है; Refresh करके दोबारा जाँचें।"},409);
