@@ -18,7 +18,7 @@ const TABLES = {
   payments: ["id","shop_id","party_id","deal_id","payment_no","payment_date","payment_type","amount","payment_method","transaction_reference","status","notes","created_at"],
   ledger_accounts: ["id","shop_id","account_code","account_name","account_type","parent_account_id","opening_balance","balance_side","system_account","active","created_at"],
   journal_entries: ["id","shop_id","entry_no","entry_date","reference_type","reference_id","description","status","reversed_entry_id","created_at"],
-  journal_lines: ["id","journal_entry_id","account_id","party_id","debit","credit"],
+  journal_lines: ["journal_entry_id","account_id","party_id","debit","credit"],
   expenses: ["id","shop_id","expense_no","expense_date","account_id","deal_id","expense_category","description","amount","payment_method","paid_to","transaction_reference","created_at"],
   audit_logs: ["id","shop_id","user_id","action","entity_type","entity_id","old_values","new_values","ip_address","created_at"]
 };
@@ -69,7 +69,8 @@ export async function onRequestPost({request,env}) {
         if(!row||typeof row!=="object"||Array.isArray(row))return json({ok:false,error:`${table} का रिकॉर्ड सही नहीं है।`},400);
         const allowed=new Set(TABLES[table]);
         if(Object.keys(row).some(k=>!allowed.has(k)))return json({ok:false,error:`${table} में अनजान कॉलम मिला।`},400);
-        if(!row.id)return json({ok:false,error:`${table} में ID वाला रिकॉर्ड नहीं है।`},400);
+        if(table==="journal_lines"){if(!row.journal_entry_id||!row.account_id||row.debit===undefined||row.credit===undefined)return json({ok:false,error:"journal_lines में जरूरी Ledger विवरण अधूरा है।"},400);}
+        else if(!row.id)return json({ok:false,error:`${table} में ID वाला रिकॉर्ड नहीं है।`},400);
         if(table==="shops"&&row.id!==user.shopId)return json({ok:false,error:"दूसरी दुकान का Backup Restore नहीं किया जा सकता।"},403);
         if(SHOP_TABLES.includes(table)&&row.shop_id!==user.shopId)return json({ok:false,error:"दूसरी दुकान का डेटा इस खाते में Restore नहीं किया जा सकता।"},403);
       }
@@ -81,7 +82,11 @@ export async function onRequestPost({request,env}) {
       for(const row of rowsByTable[table]){
         const values=cols.map(c=>row[c]===undefined?null:row[c]);
         const placeholders=cols.map(()=>"?").join(",");
-        statements.push(env.DB.prepare(`INSERT OR IGNORE INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`).bind(...values));
+        if(table==="journal_lines"){
+          statements.push(env.DB.prepare(`INSERT INTO journal_lines (${cols.join(",")}) SELECT ${placeholders} WHERE NOT EXISTS (SELECT 1 FROM journal_lines WHERE journal_entry_id=? AND account_id=? AND party_id IS ? AND debit=? AND credit=?)`).bind(...values,row.journal_entry_id,row.account_id,row.party_id??null,row.debit,row.credit));
+        }else{
+          statements.push(env.DB.prepare(`INSERT OR IGNORE INTO ${table} (${cols.join(",")}) VALUES (${placeholders})`).bind(...values));
+        }
       }
     }
     let inserted=0;
