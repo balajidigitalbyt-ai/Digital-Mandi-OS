@@ -171,13 +171,8 @@ function CommissionModule(){
     <label className="purchase-wide">डील / बिक्री चुनें *<select required value={dealId} onChange={e=>setDealId(e.target.value)}>{pending.map(d=><option key={d.deal_id} value={d.deal_id}>{d.deal_no} · {d.miller_name} · {d.crop_name} · बिक्री {money(Number(d.sale_amount))}</option>)}</select></label>
     <label>कमीशन नियम *<select required value={ruleId} onChange={e=>setRuleId(e.target.value)}><option value="">इस मिलर का नियम चुनें</option>{matchingRules.map(r=><option key={r.id} value={r.id}>{r.rule_name} · ₹{q(r.fixed_rate_per_quintal)}/Q + {q(r.percentage_rate)}%</option>)}</select></label>
     <div className="commission-base-preview"><span>Dispatch: <b>{q(selectedDeal?.dispatch_weight)} Q</b></span><span>Accepted: <b>{q(selectedDeal?.accepted_weight)} Q</b></span><span>Sale: <b>{money(Number(selectedDeal?.sale_amount||0))}</b></span><span>Purchase: <b>{money(Number(selectedDeal?.purchase_amount||0))}</b></span></div>
-    {#if matchingRules.find(r=>r.id===ruleId)?.weight_basis==='custom'}
-    <label>Custom वजन (क्विंटल) *<input required type="number" min="0.01" step="0.01" value={customWeight} onChange={e=>setCustomWeight(e.target.value)}/></label>
-    <label>Custom वजन का कारण *<input required maxLength={250} value={customWeightReason} onChange={e=>setCustomWeightReason(e.target.value)} placeholder="कारण लिखें"/></label>
-    {/if}
-    {#if matchingRules.find(r=>r.id===ruleId)?.percentage_basis==='custom_amount'}
-    <label className="purchase-wide">प्रतिशत के लिए Custom रकम (₹) *<input required type="number" min="0.01" step="0.01" value={customAmount} onChange={e=>setCustomAmount(e.target.value)}/></label>
-    {/if}
+    {matchingRules.find(r=>r.id===ruleId)?.weight_basis==='custom'&&<><label>Custom वजन (क्विंटल) *<input required type="number" min="0.01" step="0.01" value={customWeight} onChange={e=>setCustomWeight(e.target.value)}/></label><label>Custom वजन का कारण *<input required maxLength={250} value={customWeightReason} onChange={e=>setCustomWeightReason(e.target.value)} placeholder="कारण लिखें"/></label></>}
+    {matchingRules.find(r=>r.id===ruleId)?.percentage_basis==='custom_amount'&&<label className="purchase-wide">प्रतिशत के लिए Custom रकम (₹) *<input required type="number" min="0.01" step="0.01" value={customAmount} onChange={e=>setCustomAmount(e.target.value)}/></label>}
     <div className="purchase-wide purchase-hint"><ShieldCheck size={15}/> Calculate करने पर नियम, वजन, रकम और दर का immutable snapshot सेव होगा। यह अभी मिलर के ledger/payment में posting नहीं करता।</div>
     <div className="purchase-wide purchase-actions"><button className="btn-primary" disabled={saving||!ruleId}>{saving?'Calculate हो रहा है…':'कमीशन calculate और सेव करें'}</button></div>
    </form>}
