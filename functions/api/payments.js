@@ -29,7 +29,7 @@ export async function onRequestGet({request,env}){
     FROM deals d JOIN parties pa ON pa.id=d.miller_id AND pa.shop_id=d.shop_id
     JOIN crops c ON c.id=d.crop_id AND c.shop_id=d.shop_id
     JOIN (SELECT deal_id,SUM(gross_amount) AS sale_amount FROM sales GROUP BY deal_id) sa ON sa.deal_id=d.id
-    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='miller_sale_receipt' AND status='posted' GROUP BY deal_id) pm ON pm.deal_id=d.id
+    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='miller_sale_receipt' AND status='completed' GROUP BY deal_id) pm ON pm.deal_id=d.id
     WHERE d.shop_id=? AND sa.sale_amount>COALESCE(pm.paid,0)
     GROUP BY d.id,pa.name,c.name ORDER BY d.deal_date DESC LIMIT 300`).bind(user.shopId,user.shopId).all(),
    env.DB.prepare(`SELECT d.id AS deal_id,d.deal_no,d.deal_date,d.miller_id AS party_id,pa.name AS party_name,
@@ -37,7 +37,7 @@ export async function onRequestGet({request,env}){
     FROM commission_calculations cc JOIN deals d ON d.id=cc.deal_id AND d.shop_id=cc.shop_id
     JOIN parties pa ON pa.id=d.miller_id AND pa.shop_id=d.shop_id
     JOIN crops c ON c.id=d.crop_id AND c.shop_id=d.shop_id
-    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='commission_receipt' AND status='posted' GROUP BY deal_id) pm ON pm.deal_id=d.id
+    LEFT JOIN (SELECT deal_id,SUM(amount) AS paid FROM payments WHERE shop_id=? AND payment_type='commission_receipt' AND status='completed' GROUP BY deal_id) pm ON pm.deal_id=d.id
     WHERE cc.shop_id=? AND cc.total_commission>COALESCE(pm.paid,0)
     GROUP BY d.id,pa.name,c.name ORDER BY d.deal_date DESC LIMIT 300`).bind(user.shopId,user.shopId).all(),
    env.DB.prepare(`SELECT p.id,p.payment_no,p.payment_date,p.payment_type,p.amount,p.payment_method,p.transaction_reference,
@@ -72,13 +72,13 @@ export async function onRequestPost({request,env}){
    if(type==="miller_sale_receipt"){
     const [s,p]=await Promise.all([
      env.DB.prepare("SELECT COALESCE(SUM(gross_amount),0) AS total FROM sales s JOIN deals d ON d.id=s.deal_id WHERE d.shop_id=? AND s.deal_id=?").bind(user.shopId,dealId).first(),
-     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='miller_sale_receipt' AND status='posted'").bind(user.shopId,dealId).first()
+     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='miller_sale_receipt' AND status='completed'").bind(user.shopId,dealId).first()
     ]);
     due=Number(s?.total||0)-Number(p?.total||0);partyAccountCode="1101";partyAccountName="Miller Sales Receivable";partyAccountType="asset";
    }else{
     const [s,p]=await Promise.all([
      env.DB.prepare("SELECT COALESCE(SUM(total_commission),0) AS total FROM commission_calculations WHERE shop_id=? AND deal_id=?").bind(user.shopId,dealId).first(),
-     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='commission_receipt' AND status='posted'").bind(user.shopId,dealId).first()
+     env.DB.prepare("SELECT COALESCE(SUM(amount),0) AS total FROM payments WHERE shop_id=? AND deal_id=? AND payment_type='commission_receipt' AND status='completed'").bind(user.shopId,dealId).first()
     ]);
     due=Number(s?.total||0)-Number(p?.total||0);partyAccountCode="1105";partyAccountName="Miller Commission Receivable";partyAccountType="asset";
    }
@@ -98,7 +98,7 @@ export async function onRequestPost({request,env}){
   const firstDebit=type!=="farmer_payment";
   const paymentInsert=env.DB.prepare(`INSERT INTO payments
    (id,shop_id,party_id,deal_id,payment_no,payment_date,payment_type,amount,payment_method,transaction_reference,status,notes)
-   SELECT ?,?,?,?,?,?,?,?, ?,?,'posted',?
+   SELECT ?,?,?,?,?,?,?,?, ?,?,'completed',?
    WHERE EXISTS (SELECT 1 FROM deals WHERE id=? AND shop_id=?)${type==="farmer_payment"?" AND changes()>0":""}`).bind(id,user.shopId,partyId,dealId,paymentNo,date,type,amount,method,reference||null,notes||null,dealId,user.shopId);
   const statements=[];
   if(type==="farmer_payment"){
