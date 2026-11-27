@@ -225,7 +225,7 @@ function LedgerModule(){
  useEffect(()=>{load();},[]);
  const fmt=(n:number)=>money(Number(n)||0);
  const difference=Math.abs((Number(data.totals?.debit)||0)-(Number(data.totals?.credit)||0));
- const unbalancedEntries=(data.unbalanced||[]).filter((j:any)=>Math.round(Math.abs((Number(j.debit)||0)-(Number(j.credit)||0))*100)/100>0 || Number(j.line_count||0)<2);
+ const unbalancedEntries=(data.unbalanced||[]).filter((j:any)=>Math.round(Math.abs((Number(j.debit)||0)-(Number(j.credit)||0))*100)/100>0);
  return <section className="purchase-workspace">
   <div className="metrics">
    <Metric title="कुल डेबिट" value={fmt(data.totals?.debit)} change="Posted Journals" note="सभी खातों का कुल Debit" icon={<ArrowDownLeft/>} tone="blue"/>
