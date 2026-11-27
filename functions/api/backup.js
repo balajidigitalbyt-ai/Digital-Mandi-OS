@@ -59,14 +59,18 @@ export async function onRequestPost({request,env}) {
     if(backup?.app!=="Digital Mandi OS"||backup?.formatVersion!==1||backup?.shopId!==user.shopId||!backup?.tables||typeof backup.tables!=="object")
       return json({ok:false,error:"Backup format या दुकान ID मेल नहीं खाती। इसी दुकान का Digital Mandi OS backup चुनें।"},400);
     const rowsByTable=backup.tables;
+    let totalRows=0;
     for(const table of ORDER){
       if(!Array.isArray(rowsByTable[table]))return json({ok:false,error:`Backup में ${table} डेटा नहीं मिला।`},400);
+      totalRows+=rowsByTable[table].length;
       if(rowsByTable[table].length>10000)return json({ok:false,error:`${table} में बहुत अधिक रिकॉर्ड हैं।`},413);
+      if(totalRows>5000)return json({ok:false,error:"Backup में 5,000 से अधिक रिकॉर्ड हैं। छोटे भागों में Restore की सुविधा अभी उपलब्ध नहीं है।"},413);
       for(const row of rowsByTable[table]){
         if(!row||typeof row!=="object"||Array.isArray(row))return json({ok:false,error:`${table} का रिकॉर्ड सही नहीं है।`},400);
         const allowed=new Set(TABLES[table]);
         if(Object.keys(row).some(k=>!allowed.has(k)))return json({ok:false,error:`${table} में अनजान कॉलम मिला।`},400);
         if(!row.id)return json({ok:false,error:`${table} में ID वाला रिकॉर्ड नहीं है।`},400);
+        if(table==="shops"&&row.id!==user.shopId)return json({ok:false,error:"दूसरी दुकान का Backup Restore नहीं किया जा सकता।"},403);
         if(SHOP_TABLES.includes(table)&&row.shop_id!==user.shopId)return json({ok:false,error:"दूसरी दुकान का डेटा इस खाते में Restore नहीं किया जा सकता।"},403);
       }
     }
