@@ -51,7 +51,7 @@ export async function onRequestPost({request,env}){
  try{
   let dealId,partyId,snapshot,documentDate;
   if(type==="farmer"){
-   const row=await env.DB.prepare(`SELECT p.*,d.deal_no,d.deal_date,pa.name AS farmer_name,pa.village,pa.mobile,pa.address,c.name AS crop_name
+   const row=await env.DB.prepare(`SELECT p.*,d.deal_no,d.deal_date,d.variety,pa.name AS farmer_name,pa.village,pa.mobile,pa.address,c.name AS crop_name
     FROM purchases p JOIN deals d ON d.id=p.deal_id AND d.shop_id=p.shop_id
     JOIN parties pa ON pa.id=p.farmer_id AND pa.shop_id=p.shop_id
     JOIN crops c ON c.id=p.crop_id AND c.shop_id=p.shop_id
@@ -60,12 +60,12 @@ export async function onRequestPost({request,env}){
    dealId=row.deal_id;partyId=row.farmer_id;documentDate=row.purchase_date;
    snapshot={schemaVersion:1,slipType:"farmer",title:"किसान पर्ची",dealNo:row.deal_no,date:row.purchase_date,
     party:{id:partyId,name:row.farmer_name,village:row.village||"",mobile:row.mobile||"",address:row.address||""},
-    crop:row.crop_name,bags:num(row.bags),grossWeight:num(row.gross_weight),tareWeight:num(row.tare_weight),netWeight:num(row.net_weight),
+    crop:row.crop_name,variety:row.variety||'',bags:num(row.bags),grossWeight:num(row.gross_weight),tareWeight:num(row.tare_weight),netWeight:num(row.net_weight),
     ratePerQuintal:num(row.purchase_rate),grossAmount:num(row.total_amount),deduction:num(row.deduction_amount),
     payable:num(row.payable_amount),paid:num(row.paid_amount),balance:num(row.balance_amount),
     purchaseMode:row.purchase_mode==="commission"?"कमीशन मॉडल":"अपना व्यापार",notes:row.notes||""};
   }else{
-   const row=await env.DB.prepare(`SELECT ds.*,d.deal_no,d.deal_date,pa.name AS miller_name,pa.village,pa.mobile,pa.address,
+   const row=await env.DB.prepare(`SELECT ds.*,d.deal_no,d.deal_date,d.variety,pa.name AS miller_name,pa.village,pa.mobile,pa.address,
     c.name AS crop_name,s.quantity_kg,s.rate_per_quintal,s.gross_amount
     FROM dispatches ds JOIN deals d ON d.id=ds.deal_id AND d.shop_id=ds.shop_id
     JOIN parties pa ON pa.id=ds.miller_id AND pa.shop_id=ds.shop_id
