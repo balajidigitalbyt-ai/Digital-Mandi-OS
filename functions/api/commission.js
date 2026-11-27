@@ -34,7 +34,7 @@ export async function onRequestGet({ request, env }) {
         cc.calculation_snapshot,cc.calculated_at,
         je.entry_no AS journal_entry_no,je.status AS journal_status
         FROM commission_calculations cc
-        LEFT JOIN journal_entries je ON je.reference_type='commission_calculation' AND je.reference_id=cc.id AND je.shop_id=cc.shop_id
+        LEFT JOIN journal_entries je ON je.source_type='commission_calculation' AND je.source_id=cc.id AND je.shop_id=cc.shop_id
         JOIN deals d ON d.id=cc.deal_id AND d.shop_id=cc.shop_id
         JOIN parties p ON p.id=d.miller_id AND p.shop_id=d.shop_id
         JOIN crops c ON c.id=d.crop_id AND c.shop_id=d.shop_id
@@ -119,11 +119,11 @@ export async function onRequestPost({ request, env }) {
       // Ensure the shop-level control accounts exist before posting the commission journal.
       await env.DB.batch([
         env.DB.prepare(`INSERT OR IGNORE INTO ledger_accounts
-          (id,shop_id,account_code,account_name,account_type,system_account,active)
-          VALUES (?,?,?,'Miller Commission Receivable','asset',1,1)`).bind(crypto.randomUUID(),user.shopId,"1105"),
+          (id,shop_id,account_code,account_name,account_type,opening_balance,balance_side,system_account,active)
+          VALUES (?,?,?,'Miller Commission Receivable','asset',0,'debit',1,1)`).bind(crypto.randomUUID(),user.shopId,"1105"),
         env.DB.prepare(`INSERT OR IGNORE INTO ledger_accounts
-          (id,shop_id,account_code,account_name,account_type,system_account,active)
-          VALUES (?,?,?,'Commission Income','income',1,1)`).bind(crypto.randomUUID(),user.shopId,"4105")
+          (id,shop_id,account_code,account_name,account_type,opening_balance,balance_side,system_account,active)
+          VALUES (?,?,?,'Commission Income','income',0,'credit',1,1)`).bind(crypto.randomUUID(),user.shopId,"4105")
       ]);
       const [receivableAccount,incomeAccount]=await Promise.all([
         env.DB.prepare("SELECT id,account_type FROM ledger_accounts WHERE shop_id=? AND account_code=? AND active=1").bind(user.shopId,"1105").first(),
@@ -143,11 +143,11 @@ export async function onRequestPost({ request, env }) {
           WHERE NOT EXISTS (SELECT 1 FROM commission_calculations WHERE shop_id=? AND deal_id=?)`).bind(id,user.shopId,dealId,rule.id,round2(weightQ),
             Number(rule.fixed_rate_per_quintal),fixed,Number(rule.percentage_rate),round2(base),percentage,total,JSON.stringify(snapshot),user.shopId,dealId),
         env.DB.prepare(`INSERT INTO journal_entries
-          (id,shop_id,entry_no,entry_date,reference_type,reference_id,description,status)
-          SELECT ?,?,?,?,?,?,?,'posted'
+          (id,shop_id,entry_no,entry_date,source_type,source_id,narration,status,created_by)
+          SELECT ?,?,?,?,?,?,?,'posted',?
           WHERE EXISTS (SELECT 1 FROM commission_calculations WHERE id=? AND shop_id=?)
-            AND NOT EXISTS (SELECT 1 FROM journal_entries WHERE shop_id=? AND reference_type='commission_calculation' AND reference_id=?)`)
-          .bind(journalId,user.shopId,journalNo,new Date().toISOString().slice(0,10),"commission_calculation",id,narration,id,user.shopId,user.shopId,id),
+            AND NOT EXISTS (SELECT 1 FROM journal_entries WHERE shop_id=? AND source_type='commission_calculation' AND source_id=?)`)
+          .bind(journalId,user.shopId,journalNo,new Date().toISOString().slice(0,10),"commission_calculation",id,narration,user.id,id,user.shopId,user.shopId,id),
         env.DB.prepare(`INSERT INTO journal_lines (id,journal_entry_id,account_id,party_id,debit,credit)
           SELECT ?,?,?,?, ?,0 WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')`)
           .bind(crypto.randomUUID(),journalId,receivableAccount.id,deal.miller_id,total,journalId,user.shopId),
