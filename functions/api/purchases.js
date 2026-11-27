@@ -24,13 +24,29 @@ export async function onRequestPost({request,env}){
   const farmer=await env.DB.prepare("SELECT id FROM parties WHERE id=? AND shop_id=? AND active=1 AND party_type IN ('farmer','both')").bind(farmerId,user.shopId).first();
   const crop=await env.DB.prepare("SELECT id,name FROM crops WHERE id=? AND shop_id=? AND active=1").bind(cropId,user.shopId).first();
   if(!farmer||!crop)return json({ok:false,error:"चुना गया किसान या फसल उपलब्ध नहीं है।"},400);
-  await env.DB.batch([
+  const statements=[
    env.DB.prepare("INSERT INTO deals (id,shop_id,deal_no,deal_type,crop_id,farmer_id,deal_date,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?)").bind(dealId,user.shopId,dealNo,mode,cropId,farmerId,date,note,user.id),
    env.DB.prepare("INSERT INTO purchases (id,shop_id,deal_id,farmer_id,crop_id,purchase_date,bags,gross_weight,tare_weight,net_weight,purchase_rate,total_amount,deduction_amount,payable_amount,paid_amount,balance_amount,purchase_mode,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?)").bind(id,user.shopId,dealId,farmerId,cropId,date,bags,gross,tare,net,rate,total,deduction,payable,payable,mode,note),
    env.DB.prepare("INSERT INTO weighments (id,shop_id,deal_id,party_id,crop_id,weighment_type,weight_quintals,measured_at,notes) VALUES (?,?,?,?,?,'net',?,?,?)").bind(weighId,user.shopId,dealId,farmerId,cropId,net,now,note),
-   env.DB.prepare("INSERT INTO stock_lots (id,shop_id,deal_id,crop_id,owner_type,owner_party_id,quantity_kg,available_kg,status) VALUES (?,?,?,?,?,?,?,?, 'available')").bind(stockId,user.shopId,dealId,cropId,ownerType,mode==="commission"?farmerId:null,kg,kg),
-   env.DB.prepare("INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values) VALUES (?,?,?,'create','purchase',?,NULL,?)").bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify({dealNo,farmerId,cropId,mode,date,bags,gross,tare,net,rate,total,deduction,payable}))
-  ]);
+   env.DB.prepare("INSERT INTO stock_lots (id,shop_id,deal_id,crop_id,owner_type,owner_party_id,quantity_kg,available_kg,status) VALUES (?,?,?,?,?,?,?,?, 'available')").bind(stockId,user.shopId,dealId,cropId,ownerType,mode==="commission"?farmerId:null,kg,kg)
+  ];
+  // Own-trade purchases create inventory and farmer-payable accounting in the same D1 batch.
+  if(mode==="own_trade"){
+   const [stockAccount,farmerPayableAccount]=await Promise.all([
+    env.DB.prepare("SELECT id FROM ledger_accounts WHERE shop_id=? AND account_code='1201' AND active=1").bind(user.shopId).first(),
+    env.DB.prepare("SELECT id FROM ledger_accounts WHERE shop_id=? AND account_code='2101' AND active=1").bind(user.shopId).first()
+   ]);
+   if(!stockAccount||!farmerPayableAccount)throw new Error("Required Stock Inventory (1201) or Farmer Payable (2101) account is missing.");
+   const journalId=crypto.randomUUID();
+   const journalNo="JV-PUR-"+date.replaceAll("-","")+"-"+id.slice(0,8).toUpperCase();
+   statements.push(
+    env.DB.prepare("INSERT INTO journal_entries (id,shop_id,entry_no,entry_date,reference_type,reference_id,description,status,created_at) VALUES (?,?,?,?,?,?,?,'posted',?)").bind(journalId,user.shopId,journalNo,date,"purchase",id,"Own trade purchase - Stock Inventory",now),
+    env.DB.prepare("INSERT INTO journal_lines (journal_entry_id,account_id,party_id,debit,credit) VALUES (?,?,NULL,?,0)").bind(journalId,stockAccount.id,payable),
+    env.DB.prepare("INSERT INTO journal_lines (journal_entry_id,account_id,party_id,debit,credit) VALUES (?,?,?,0,?)").bind(journalId,farmerPayableAccount.id,farmerId,payable)
+   );
+  }
+  statements.push(env.DB.prepare("INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values) VALUES (?,?,?,'create','purchase',?,NULL,?)").bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify({dealNo,farmerId,cropId,mode,date,bags,gross,tare,net,rate,total,deduction,payable})));
+  await env.DB.batch(statements);
   return json({ok:true,purchase:{id,purchase_date:date,bags,net_weight:net,purchase_rate:rate,payable_amount:payable,purchase_mode:mode,farmer_name:(await env.DB.prepare("SELECT name FROM parties WHERE id=? AND shop_id=?").bind(farmerId,user.shopId).first())?.name??"",crop_name:crop.name}},201);
  }catch{return json({ok:false,error:"खरीद सेव नहीं हुई। कोई रिकॉर्ड आधा सेव नहीं किया गया; schema या enum की जाँच जरूरी है।"},503);}
 }
