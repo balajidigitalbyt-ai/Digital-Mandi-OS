@@ -1,0 +1,9 @@
+# Cloudflare Pages configuration for the Digital Mandi OS app.
+name = "digital-mandi-os"
+compatibility_date = "2026-11-27"
+pages_build_output_dir = "./dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "digital-mandi-os-db"
+database_id = "7aa701cf-7eea-4333-9671-1484f042bd22"
