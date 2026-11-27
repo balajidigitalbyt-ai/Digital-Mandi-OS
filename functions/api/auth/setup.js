@@ -22,8 +22,9 @@ export async function onRequestPost({ request, env }) {
 
   const shopId = crypto.randomUUID();
   const userId = crypto.randomUUID();
-  const passwordHash = await hashPassword(password);
   try {
+    // Cloudflare Workers WebCrypto supports up to 100,000 PBKDF2 iterations.
+    const passwordHash = await hashPassword(password);
     const statements = [
       env.DB.prepare(
         "INSERT INTO shops (id, name, owner_name, phone) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM shops) AND NOT EXISTS (SELECT 1 FROM users)"
