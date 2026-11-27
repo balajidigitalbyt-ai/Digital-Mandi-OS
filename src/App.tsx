@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Activity, ArrowDownLeft, ArrowUpRight, BarChart3, Bell, BookOpen, Boxes, CalendarDays, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardList, Command, CreditCard, Download, FilePlus2, FileText, Filter, Home, IndianRupee, Leaf, Menu, MoreHorizontal, PackageCheck, Plus, Printer, Search, Settings2, ShieldCheck, Sprout, Truck, Users, Wheat, X } from 'lucide-react';
 
-type Section = 'Overview'|'Farmers'|'Millers'|'Purchase'|'Stock'|'Sales & Dispatch'|'Payments'|'Ledger'|'Commission'|'Slip Center'|'Reports';
+type Section = 'Overview'|'Farmers'|'Millers'|'Purchase'|'Stock'|'Sales & Dispatch'|'Payments'|'Expenses'|'Ledger'|'Commission'|'Slip Center'|'Reports';
 const nav:{label:Section;icon:any;group:string}[]=[
  {label:'Overview',icon:Home,group:'WORKSPACE'},
  {label:'Farmers',icon:Users,group:'PARTIES'},{label:'Millers',icon:Users,group:'PARTIES'},
  {label:'Purchase',icon:ArrowDownLeft,group:'OPERATIONS'},{label:'Stock',icon:Boxes,group:'OPERATIONS'},{label:'Sales & Dispatch',icon:Truck,group:'OPERATIONS'},
- {label:'Payments',icon:CreditCard,group:'ACCOUNTS'},{label:'Ledger',icon:BookOpen,group:'ACCOUNTS'},{label:'Commission',icon:IndianRupee,group:'ACCOUNTS'},
+ {label:'Payments',icon:CreditCard,group:'ACCOUNTS'},{label:'Expenses',icon:ClipboardList,group:'ACCOUNTS'},{label:'Ledger',icon:BookOpen,group:'ACCOUNTS'},{label:'Commission',icon:IndianRupee,group:'ACCOUNTS'},
  {label:'Slip Center',icon:FileText,group:'DOCUMENTS'},{label:'Reports',icon:BarChart3,group:'INSIGHTS'}
 ];
 const money=(n:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n);
@@ -42,7 +42,7 @@ function Dashboard({authUser}:{authUser:AuthUser}){
      <div className="lower-grid"><section className="panel activity-panel"><div className="panel-head"><div><h3>हाल की गतिविधियाँ</h3><p>आज के लेन-देन और एंट्री</p></div><button className="dots-btn" onClick={()=>setSection('Slip Center')}><MoreHorizontal/></button></div><div className="activity-list"><div className="empty">अभी कोई कारोबार एंट्री नहीं है। Purchase और Payment मॉड्यूल जुड़ने पर वास्तविक गतिविधियाँ यहाँ दिखेंगी।</div></div><button className="full-link" onClick={()=>setSection('Slip Center')}>सभी गतिविधियाँ देखें <ChevronRight size={15}/></button></section>
       <section className="panel crop-panel"><div className="panel-head"><div><h3>फसल के अनुसार स्टॉक</h3><p>कुल उपलब्ध वजन · क्विंटल</p></div><button className="dots-btn" onClick={()=>setSection('Stock')}><MoreHorizontal/></button></div><div className="stock-total"><b>0.00 <small>Q</small></b><span><i/> कुल स्टॉक</span></div><div className="crop-bars"><CropBar name="धान" amount="0.00 Q" percent={0} color="mint"/><CropBar name="गेहूँ" amount="0.00 Q" percent={0} color="bluebar"/><CropBar name="चना" amount="0.00 Q" percent={0} color="goldbar"/></div><div className="stock-foot"><span><span className="tiny-dot mint-bg"/> अपना स्टॉक <b>0.00 Q</b></span><span><span className="tiny-dot gold-bg"/> कमीशन स्टॉक <b>0.00 Q</b></span></div></section></div>
      <div className="bottom-grid"><section className="panel"><div className="panel-head"><div><h3>क्विक एक्सेस</h3><p>रोज़ के काम तुरंत शुरू करें</p></div></div><div className="quick-grid"><Quick icon={<Users/>} label="किसान जोड़ें" onClick={()=>setSection('Farmers')}/><Quick icon={<PackageCheck/>} label="खरीद एंट्री" onClick={()=>setSection('Purchase')}/><Quick icon={<FileText/>} label="किसान पर्ची" onClick={()=>{setSlipType('farmer');setSection('Slip Center')}}/><Quick icon={<FilePlus2/>} label="मिलर पर्ची" onClick={()=>{setSlipType('miller');setSection('Slip Center')}}/></div></section><section className="panel commission-panel"><div className="panel-head"><div><h3>कमीशन ट्रैकर</h3><p>मिलर से मिलने वाला कमीशन</p></div><span className="status-chip">इस माह</span></div><div className="commission-number">₹ 0 <span>—</span></div><div className="commission-track"><i/></div><div className="commission-meta"><span>अर्जित कमीशन</span><b>₹ 0 / ₹ 0</b></div><button className="full-link" onClick={()=>setSection('Commission')}>कमीशन का हिसाब देखें <ChevronRight size={15}/></button></section></div>
-    </>:section==='Farmers'||section==='Millers'?<PartyModule type={section==='Farmers'?'farmer':'miller'}/>:section==='Purchase'?<PurchaseModule/>:section==='Stock'?<StockModule/>:section==='Sales & Dispatch'?<SalesDispatchModule/>:section==='Payments'?<PaymentsModule/>:section==='Ledger'?<LedgerModule/>:section==='Commission'?<CommissionModule/>:section==='Reports'?<OwnTradeReportModule/>:section==='Slip Center'?<SlipCenterModule initialType={slipType}/>:<section className="panel module-placeholder"><div className="placeholder-icon"><Command size={28}/></div><h2>{section} मॉड्यूल तैयार हो रहा है</h2><p>इस सेक्शन को अगले चरण में वास्तविक डेटा, फॉर्म और अकाउंटिंग लॉजिक से जोड़ा जाएगा। अभी Slip Center में किसान और मिलर पर्ची की एंट्री देख सकते हैं।</p><button className="btn-primary" onClick={()=>setSection('Slip Center')}>Slip Center खोलें <ChevronRight size={16}/></button></section>}
+    </>:section==='Farmers'||section==='Millers'?<PartyModule type={section==='Farmers'?'farmer':'miller'}/>:section==='Purchase'?<PurchaseModule/>:section==='Stock'?<StockModule/>:section==='Sales & Dispatch'?<SalesDispatchModule/>:section==='Payments'?<PaymentsModule/>:section==='Expenses'?<ExpensesModule/>:section==='Ledger'?<LedgerModule/>:section==='Commission'?<CommissionModule/>:section==='Reports'?<OwnTradeReportModule/>:section==='Slip Center'?<SlipCenterModule initialType={slipType}/>:<section className="panel module-placeholder"><div className="placeholder-icon"><Command size={28}/></div><h2>{section} मॉड्यूल तैयार हो रहा है</h2><p>इस सेक्शन को अगले चरण में वास्तविक डेटा, फॉर्म और अकाउंटिंग लॉजिक से जोड़ा जाएगा। अभी Slip Center में किसान और मिलर पर्ची की एंट्री देख सकते हैं।</p><button className="btn-primary" onClick={()=>setSection('Slip Center')}>Slip Center खोलें <ChevronRight size={16}/></button></section>}
     <footer><span>© 2026 Digital Mandi OS</span><span><span className="live-dot"/> D1 connected · modules in rollout</span><span>Made for Indian Mandis <Leaf size={13}/></span></footer>
    </div>
   </main>
@@ -278,6 +278,40 @@ function LedgerModule(){
    <div className="table-wrap"><table><thead><tr><th>Entry No.</th><th>तारीख</th><th>विवरण</th><th>Debit</th><th>Credit</th><th>अंतर</th></tr></thead><tbody>{unbalancedEntries.map((j:any)=><tr key={j.id}><td className="id-cell">{j.entry_no}</td><td>{j.entry_date}</td><td>{j.description}</td><td>{fmt(j.debit)}</td><td>{fmt(j.credit)}</td><td className="weight-cell">{fmt(Number(j.debit)-Number(j.credit))}</td></tr>)}</tbody></table>{!loading&&!unbalancedEntries.length?<div className="empty">सभी जाँची गई posted Journal entries संतुलित हैं।</div>:null}</div>
   </div>
   <p className="auth-hint">नोट: यह Ledger रिपोर्ट journal posting पर आधारित है। Opening balance, purchase/sales posting और पूर्ण balance sheet अभी इस रिपोर्ट में शामिल नहीं हैं।</p>
+ </section>;
+}
+
+
+function ExpensesModule(){
+ const [expenses,setExpenses]=useState<any[]>([]);const [deals,setDeals]=useState<any[]>([]);
+ const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);const [error,setError]=useState('');const [success,setSuccess]=useState('');
+ const [category,setCategory]=useState('labour');const [description,setDescription]=useState('');const [amount,setAmount]=useState('');
+ const [date,setDate]=useState(new Date().toISOString().slice(0,10));const [method,setMethod]=useState('cash');const [dealId,setDealId]=useState('');
+ const [paidTo,setPaidTo]=useState('');const [reference,setReference]=useState('');
+ const load=async()=>{setLoading(true);setError('');try{const r=await fetch('/api/expenses');const d=await r.json();if(!r.ok)throw new Error(d.error||'खर्च डेटा लोड नहीं हुआ');setExpenses(d.expenses||[]);setDeals(d.deals||[]);}catch(e){setError(e instanceof Error?e.message:'खर्च डेटा लोड नहीं हुआ');}finally{setLoading(false);}};
+ useEffect(()=>{load();},[]);
+ const save=async(e:React.FormEvent)=>{e.preventDefault();setSaving(true);setError('');setSuccess('');try{const r=await fetch('/api/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category,description,amount:Number(amount),expenseDate:date,paymentMethod:method,dealId,paidTo,transactionReference:reference})});const d=await r.json();if(!r.ok)throw new Error([d.error||'खर्च सेव नहीं हुआ',d.detail].filter(Boolean).join(' — '));setSuccess('खर्च सेव हो गया और Ledger में पोस्ट हो गया। पर्ची नंबर: '+d.expense.expense_no);setDescription('');setAmount('');setPaidTo('');setReference('');await load();}catch(e){setError(e instanceof Error?e.message:'खर्च सेव नहीं हुआ');}finally{setSaving(false);}};
+ const categoryLabel=(v:string)=>({labour:'मजदूरी',handling:'हमाली',transport:'गाड़ी भाड़ा',bags:'बोरी / पैकिंग',mandi:'मंडी खर्च',other:'अन्य खर्च'} as any)[v]||v;
+ return <section className="purchase-workspace">
+  <div className="panel purchase-panel"><div className="party-head"><div><h2>नया कारोबार खर्च</h2><p>मजदूरी, हमाली, भाड़ा और अन्य खर्च दर्ज करें। हर एंट्री Ledger में जाएगी।</p></div><span className="status-chip">DOUBLE-ENTRY LEDGER</span></div>
+   {error&&<div className="auth-error">{error}</div>}{success&&<div className="purchase-success"><Check size={16}/>{success}</div>}
+   <form className="purchase-form" onSubmit={save}>
+    <label>खर्च का प्रकार *<select required value={category} onChange={e=>setCategory(e.target.value)}><option value="labour">मजदूरी</option><option value="handling">हमाली</option><option value="transport">गाड़ी भाड़ा</option><option value="bags">बोरी / पैकिंग</option><option value="mandi">मंडी खर्च</option><option value="other">अन्य खर्च</option></select></label>
+    <label>रकम (₹) *<input required type="number" min="0.01" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="खर्च की रकम"/></label>
+    <label>खर्च तारीख *<input required type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
+    <label>भुगतान तरीका *<select value={method} onChange={e=>setMethod(e.target.value)}><option value="cash">Cash</option><option value="bank">Bank</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="other">Other</option></select></label>
+    <label className="purchase-wide">विवरण *<input required value={description} onChange={e=>setDescription(e.target.value)} placeholder="जैसे 2 मजदूरों की हमाली / ट्रक भाड़ा"/></label>
+    <label>किसे भुगतान किया<input value={paidTo} onChange={e=>setPaidTo(e.target.value)} placeholder="नाम / फर्म"/></label>
+    <label>संबंधित डील (वैकल्पिक)<select value={dealId} onChange={e=>setDealId(e.target.value)}><option value="">किसी डील से नहीं</option>{deals.map(d=><option key={d.id} value={d.id}>{d.deal_no} · {d.deal_type==='own_trade'?'अपना व्यापार':'कमीशन'} · {d.deal_date}</option>)}</select></label>
+    <label className="purchase-wide">UTR / Transaction Ref<input value={reference} onChange={e=>setReference(e.target.value)} placeholder="वैकल्पिक"/></label>
+    <div className="purchase-wide modal-note"><ShieldCheck size={16}/> खर्च सेव होने पर Expense Account Debit और Cash/Bank Credit होगा। डील से जोड़ने पर Own Trade Profit & Loss में खर्च घटेगा।</div>
+    <div className="purchase-wide party-form-actions"><button type="button" className="btn-secondary" onClick={()=>{setDescription('');setAmount('');setPaidTo('');setReference('');setDealId('');}}>Clear</button><button className="btn-primary" disabled={saving}>{saving?'सेव हो रहा है…':'खर्च सेव करें'}</button></div>
+   </form>
+  </div>
+  <div className="panel purchase-panel"><div className="party-head"><div><h2>हाल के खर्च</h2><p>कुल रिकॉर्ड: {expenses.length} · D1 Database</p></div><button className="btn-secondary compact" onClick={load} disabled={loading}>Refresh</button></div>
+   <div className="table-wrap"><table><thead><tr><th>तारीख</th><th>पर्ची नंबर</th><th>प्रकार</th><th>विवरण</th><th>डील</th><th>भुगतान तरीका</th><th>रकम</th></tr></thead><tbody>{expenses.map(x=><tr key={x.id}><td>{x.expense_date}</td><td className="id-cell">{x.expense_no}</td><td>{x.expense_category}</td><td className="party-cell">{x.description}{x.paid_to?' · '+x.paid_to:''}</td><td>{x.deal_no||'—'}</td><td>{String(x.payment_method||'').toUpperCase()}</td><td className="weight-cell">{money(Number(x.amount)||0)}</td></tr>)}</tbody></table>{loading?<div className="empty">खर्च लोड हो रहे हैं…</div>:expenses.length===0?<div className="empty">अभी कोई खर्च दर्ज नहीं है। पहली एंट्री ऊपर से करें।</div>:null}</div>
+  </div>
+  <p className="auth-hint">पुरानी एंट्री हटाई नहीं जाती। हर खर्च के साथ संतुलित Journal और Audit Log बनता है। डील से जुड़े खर्च अपने व्यापार की रिपोर्ट में भी दिखाई देंगे।</p>
  </section>;
 }
 
