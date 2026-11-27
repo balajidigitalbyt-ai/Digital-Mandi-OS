@@ -12,7 +12,7 @@ export async function onRequestGet({ request, env }) {
         LEFT JOIN parties p ON p.id=sl.owner_party_id AND p.shop_id=?
         WHERE sl.shop_id=? AND sl.status='available' AND sl.available_kg>0
         ORDER BY sl.created_at DESC LIMIT 500`).bind(user.shopId,user.shopId,user.shopId,user.shopId).all(),
-      env.DB.prepare(`SELECT s.id,s.quantity_kg,s.rate_per_quintal,s.gross_amount,s.created_at,p.name AS miller_name,c.name AS crop_name,ds.vehicle_number,ds.dispatch_weight,ds.accepted_weight,ds.weight_difference
+      env.DB.prepare(`SELECT s.id,s.quantity_kg,s.rate_per_quintal,s.gross_amount,s.created_at,d.deal_no,d.deal_type,p.name AS miller_name,c.name AS crop_name,ds.vehicle_number,ds.dispatch_weight,ds.accepted_weight,ds.weight_difference
         FROM sales s JOIN deals d ON d.id=s.deal_id AND d.shop_id=?
         JOIN parties p ON p.id=s.miller_id AND p.shop_id=?
         JOIN crops c ON c.id=s.crop_id AND c.shop_id=?
