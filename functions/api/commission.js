@@ -7,7 +7,8 @@ export async function onRequestGet({ request, env }) {
   const user = await getSession(request, env);
   if (!user) return json({ ok: false, error: "Login required." }, 401);
   try {
-    const [rules, pending, calculations] = await Promise.all([
+    const [millers, rules, pending, calculations] = await Promise.all([
+      env.DB.prepare("SELECT id,name FROM parties WHERE shop_id=? AND active=1 AND party_type IN ('miller','both') ORDER BY name LIMIT 500").bind(user.shopId).all(),
       env.DB.prepare(`SELECT r.id,r.miller_id,p.name AS miller_name,r.rule_name,r.fixed_rate_per_quintal,
         r.percentage_rate,r.weight_basis,r.percentage_basis,r.active,r.effective_from,r.effective_to,r.created_at
         FROM commission_rules r JOIN parties p ON p.id=r.miller_id AND p.shop_id=r.shop_id
@@ -37,7 +38,7 @@ export async function onRequestGet({ request, env }) {
         JOIN crops c ON c.id=d.crop_id AND c.shop_id=d.shop_id
         WHERE cc.shop_id=? ORDER BY cc.calculated_at DESC LIMIT 200`).bind(user.shopId).all()
     ]);
-    return json({ok:true,rules:rules.results??[],pending:pending.results??[],calculations:calculations.results??[]});
+    return json({ok:true,millers:millers.results??[],rules:rules.results??[],pending:pending.results??[],calculations:calculations.results??[]});
   } catch {
     return json({ok:false,error:"कमीशन डेटा लोड नहीं हुआ। लाइव D1 schema की जाँच जरूरी है।"},503);
   }
