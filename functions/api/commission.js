@@ -31,8 +31,10 @@ export async function onRequestGet({ request, env }) {
       env.DB.prepare(`SELECT cc.id,cc.deal_id,d.deal_no,d.deal_date,p.name AS miller_name,c.name AS crop_name,
         cc.weight_quintals,cc.fixed_rate_per_quintal,cc.fixed_commission,cc.percentage_rate,
         cc.percentage_base_amount,cc.percentage_commission,cc.total_commission,
-        cc.calculation_snapshot,cc.calculated_at
+        cc.calculation_snapshot,cc.calculated_at,
+        je.entry_no AS journal_entry_no,je.status AS journal_status
         FROM commission_calculations cc
+        LEFT JOIN journal_entries je ON je.reference_type='commission_calculation' AND je.reference_id=cc.id AND je.shop_id=cc.shop_id
         JOIN deals d ON d.id=cc.deal_id AND d.shop_id=cc.shop_id
         JOIN parties p ON p.id=d.miller_id AND p.shop_id=d.shop_id
         JOIN crops c ON c.id=d.crop_id AND c.shop_id=d.shop_id
@@ -114,6 +116,25 @@ export async function onRequestPost({ request, env }) {
         percentageBasis:rule.percentage_basis,percentageRate:Number(rule.percentage_rate),
         percentageBaseAmount:round2(base),percentageCommission:percentage,totalCommission:total,
         customWeightReason:rule.weight_basis==="custom"?customWeightReason:null,calculatedBy:user.id};
+      // Ensure the shop-level control accounts exist before posting the commission journal.
+      await env.DB.batch([
+        env.DB.prepare(`INSERT OR IGNORE INTO ledger_accounts
+          (id,shop_id,account_code,account_name,account_type,system_account,active)
+          VALUES (?,?,?,'Miller Commission Receivable','asset',1,1)`).bind(crypto.randomUUID(),user.shopId,"1105"),
+        env.DB.prepare(`INSERT OR IGNORE INTO ledger_accounts
+          (id,shop_id,account_code,account_name,account_type,system_account,active)
+          VALUES (?,?,?,'Commission Income','income',1,1)`).bind(crypto.randomUUID(),user.shopId,"4105")
+      ]);
+      const [receivableAccount,incomeAccount]=await Promise.all([
+        env.DB.prepare("SELECT id,account_type FROM ledger_accounts WHERE shop_id=? AND account_code=? AND active=1").bind(user.shopId,"1105").first(),
+        env.DB.prepare("SELECT id,account_type FROM ledger_accounts WHERE shop_id=? AND account_code=? AND active=1").bind(user.shopId,"4105").first()
+      ]);
+      if(!receivableAccount||receivableAccount.account_type!=="asset"||!incomeAccount||incomeAccount.account_type!=="income"){
+        return json({ok:false,error:"कमीशन के Ledger Control Accounts सही उपलब्ध नहीं हैं। कोई कमीशन या Journal पोस्ट नहीं हुआ।"},503);
+      }
+      const journalId=crypto.randomUUID();
+      const journalNo="CM-"+deal.deal_no+"-"+journalId.slice(0,6).toUpperCase();
+      const narration="Miller commission receivable — "+deal.deal_no;
       const results = await env.DB.batch([
         env.DB.prepare(`INSERT INTO commission_calculations
           (id,shop_id,deal_id,commission_rule_id,weight_quintals,fixed_rate_per_quintal,fixed_commission,
@@ -121,15 +142,30 @@ export async function onRequestPost({ request, env }) {
           SELECT ?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP
           WHERE NOT EXISTS (SELECT 1 FROM commission_calculations WHERE shop_id=? AND deal_id=?)`).bind(id,user.shopId,dealId,rule.id,round2(weightQ),
             Number(rule.fixed_rate_per_quintal),fixed,Number(rule.percentage_rate),round2(base),percentage,total,JSON.stringify(snapshot),user.shopId,dealId),
+        env.DB.prepare(`INSERT INTO journal_entries
+          (id,shop_id,entry_no,entry_date,reference_type,reference_id,description,status)
+          SELECT ?,?,?,?,?,?,?,'posted'
+          WHERE EXISTS (SELECT 1 FROM commission_calculations WHERE id=? AND shop_id=?)
+            AND NOT EXISTS (SELECT 1 FROM journal_entries WHERE shop_id=? AND reference_type='commission_calculation' AND reference_id=?)`)
+          .bind(journalId,user.shopId,journalNo,new Date().toISOString().slice(0,10),"commission_calculation",id,narration,id,user.shopId,user.shopId,id),
+        env.DB.prepare(`INSERT INTO journal_lines (id,journal_entry_id,account_id,party_id,debit,credit)
+          SELECT ?,?,?,?, ?,0 WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')`)
+          .bind(crypto.randomUUID(),journalId,receivableAccount.id,deal.miller_id,total,journalId,user.shopId),
+        env.DB.prepare(`INSERT INTO journal_lines (id,journal_entry_id,account_id,party_id,debit,credit)
+          SELECT ?,?,?,NULL,0,? WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')`)
+          .bind(crypto.randomUUID(),journalId,incomeAccount.id,total,journalId,user.shopId),
         env.DB.prepare(`INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values)
-          SELECT ?,?,?, 'create','commission_calculation',?,NULL,?
-          WHERE EXISTS (SELECT 1 FROM commission_calculations WHERE id=? AND shop_id=?)`).bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify(snapshot),id,user.shopId)
+          VALUES (?,?,?,'create','commission_calculation',?,NULL,?)`)
+          .bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify({...snapshot,journalEntryNo:journalNo,posting:"posted"}))
       ]);
       if(!results?.[0]?.meta?.changes)return json({ok:false,error:"इस डील का कमीशन पहले ही calculate हो चुका है। दोबारा सेव नहीं किया गया।"},409);
+      if(!results?.[1]?.meta?.changes||!results?.[2]?.meta?.changes||!results?.[3]?.meta?.changes){
+        return json({ok:false,error:"Commission calculation या balanced journal posting पूरी नहीं हुई। आगे कोई नई entry न करें; रिकॉर्ड की जाँच जरूरी है।"},503);
+      }
       return json({ok:true,calculation:{id,deal_id:dealId,deal_no:deal.deal_no,miller_name:deal.miller_name,
         weight_quintals:round2(weightQ),fixed_rate_per_quintal:Number(rule.fixed_rate_per_quintal),
         fixed_commission:fixed,percentage_rate:Number(rule.percentage_rate),percentage_base_amount:round2(base),
-        percentage_commission:percentage,total_commission:total,calculation_snapshot:JSON.stringify(snapshot)}},201);
+        percentage_commission:percentage,total_commission:total,calculation_snapshot:JSON.stringify(snapshot),journal_entry_no:journalNo,journal_status:"posted"}},201);
     } catch {
       return json({ok:false,error:"कमीशन calculate नहीं हुआ। रिकॉर्ड सेव नहीं हुआ; live D1 schema की जाँच जरूरी है।"},503);
     }
