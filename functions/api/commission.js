@@ -114,14 +114,18 @@ export async function onRequestPost({ request, env }) {
         percentageBasis:rule.percentage_basis,percentageRate:Number(rule.percentage_rate),
         percentageBaseAmount:round2(base),percentageCommission:percentage,totalCommission:total,
         customWeightReason:rule.weight_basis==="custom"?customWeightReason:null,calculatedBy:user.id};
-      await env.DB.batch([
+      const results = await env.DB.batch([
         env.DB.prepare(`INSERT INTO commission_calculations
           (id,shop_id,deal_id,commission_rule_id,weight_quintals,fixed_rate_per_quintal,fixed_commission,
            percentage_rate,percentage_base_amount,percentage_commission,total_commission,calculation_snapshot,calculated_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(id,user.shopId,dealId,rule.id,round2(weightQ),
-            Number(rule.fixed_rate_per_quintal),fixed,Number(rule.percentage_rate),round2(base),percentage,total,JSON.stringify(snapshot)),
-        env.DB.prepare("INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values) VALUES (?,?,?,'create','commission_calculation',?,NULL,?)").bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify(snapshot))
+          SELECT ?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP
+          WHERE NOT EXISTS (SELECT 1 FROM commission_calculations WHERE shop_id=? AND deal_id=?)`).bind(id,user.shopId,dealId,rule.id,round2(weightQ),
+            Number(rule.fixed_rate_per_quintal),fixed,Number(rule.percentage_rate),round2(base),percentage,total,JSON.stringify(snapshot),user.shopId,dealId),
+        env.DB.prepare(`INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values)
+          SELECT ?,?,?, 'create','commission_calculation',?,NULL,?
+          WHERE EXISTS (SELECT 1 FROM commission_calculations WHERE id=? AND shop_id=?)`).bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify(snapshot),id,user.shopId)
       ]);
+      if(!results?.[0]?.meta?.changes)return json({ok:false,error:"इस डील का कमीशन पहले ही calculate हो चुका है। दोबारा सेव नहीं किया गया।"},409);
       return json({ok:true,calculation:{id,deal_id:dealId,deal_no:deal.deal_no,miller_name:deal.miller_name,
         weight_quintals:round2(weightQ),fixed_rate_per_quintal:Number(rule.fixed_rate_per_quintal),
         fixed_commission:fixed,percentage_rate:Number(rule.percentage_rate),percentage_base_amount:round2(base),
