@@ -18,3 +18,8 @@ This endpoint does not create, update, or delete any business data. It is a conn
 ## Next implementation rule
 
 Before adding business queries, verify the exact live D1 column definitions and map each API query to those columns. Never run the initial migration against the already-created production database.
+
+
+## Deployment reconnect
+
+A documentation-only commit can be used to trigger a fresh Pages production deployment after reconnecting the Git provider. It does not modify the existing D1 database.
