@@ -1,4 +1,4 @@
-const ITERATIONS = 310000;
+const ITERATIONS = 100000;
 const COOKIE = "dmos_session";
 const SESSION_SECONDS = 8 * 60 * 60;
 
