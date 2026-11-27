@@ -112,10 +112,10 @@ export async function onRequestPost({request,env}){
    WHERE EXISTS (SELECT 1 FROM payments WHERE id=? AND shop_id=?)`).bind(journalId,user.shopId,entryNo,date,"payment",id,narration+" · "+deal.deal_no,id,user.shopId));
   statements.push(env.DB.prepare(`INSERT INTO journal_lines (id,journal_entry_id,account_id,party_id,debit,credit)
    SELECT ?,?,?,?, ?,? WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')`)
-   .bind(crypto.randomUUID(),journalId,firstDebit?cashAccount.id:partyAccount.id,partyId,amount,0,journalId,user.shopId));
+   .bind(crypto.randomUUID(),journalId,firstDebit?cashAccount.id:partyAccount.id,firstDebit?null:partyId,amount,0,journalId,user.shopId));
   statements.push(env.DB.prepare(`INSERT INTO journal_lines (id,journal_entry_id,account_id,party_id,debit,credit)
    SELECT ?,?,?,?, ?,? WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')`)
-   .bind(crypto.randomUUID(),journalId,firstDebit?partyAccount.id:cashAccount.id,partyId,0,amount,journalId,user.shopId));
+   .bind(crypto.randomUUID(),journalId,firstDebit?partyAccount.id:cashAccount.id,firstDebit?partyId:null,0,amount,journalId,user.shopId));
   statements.push(env.DB.prepare(`INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values)
    SELECT ?,?,?, 'create','payment',?,NULL,? WHERE EXISTS (SELECT 1 FROM payments WHERE id=? AND shop_id=?)`).bind(crypto.randomUUID(),user.shopId,user.id,id,JSON.stringify({paymentNo,dealId,partyId,type,amount,method,date,journalEntryNo:entryNo}),id,user.shopId));
   const result=await env.DB.batch(statements);
