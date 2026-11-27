@@ -122,5 +122,8 @@ export async function onRequestPost({request,env}){
   const paymentIndex=type==="farmer_payment"?1:0;
   if(!result?.[paymentIndex]?.meta?.changes)return json({ok:false,error:"भुगतान सेव नहीं हुआ। बकाया बदल चुका हो सकता है; Refresh करके दोबारा जाँचें।"},409);
   return json({ok:true,payment:{id,payment_no:paymentNo,amount,payment_type:type,payment_date:date,journal_entry_no:entryNo},remainingDue:round2(due-amount)},201);
- }catch{return json({ok:false,error:"भुगतान सेव नहीं हुआ। Live D1 schema या ledger columns की जाँच जरूरी है।"},503);}
+ }catch(e){
+  console.error("Payments POST failed:",e);
+  return json({ok:false,error:"भुगतान सेव नहीं हुआ।",detail:String(e?.message||e||"Unknown database error").slice(0,500)},500);
+ }
 }
