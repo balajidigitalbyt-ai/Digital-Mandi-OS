@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Activity, ArrowDownLeft, ArrowUpRight, BarChart3, Bell, Boxes, CalendarDays, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardList, Command, CreditCard, Download, FilePlus2, FileText, Filter, Home, IndianRupee, Leaf, Menu, MoreHorizontal, PackageCheck, Plus, Printer, Search, Settings2, ShieldCheck, Sprout, Truck, Users, Wheat, X } from 'lucide-react';
 
 type Section = 'Overview'|'Farmers'|'Millers'|'Purchase'|'Stock'|'Sales & Dispatch'|'Payments'|'Commission'|'Slip Center'|'Reports';
@@ -10,11 +10,7 @@ const nav:{label:Section;icon:any;group:string}[]=[
  {label:'Payments',icon:CreditCard,group:'ACCOUNTS'},{label:'Commission',icon:IndianRupee,group:'ACCOUNTS'},
  {label:'Slip Center',icon:FileText,group:'DOCUMENTS'},{label:'Reports',icon:BarChart3,group:'INSIGHTS'}
 ];
-const initialSlips:Slip[]=[
- {id:'K-000124',type:'किसान पर्ची',party:'रामलाल वर्मा',crop:'धान · MTU 1010',weight:'42.80 क्विंटल',date:'आज, 11:42 AM',status:'जमा'},
- {id:'M-000087',type:'मिलर पर्ची',party:'श्री बालाजी राइस मिल',crop:'धान · MTU 1010',weight:'41.95 क्विंटल',date:'आज, 10:18 AM',status:'डिस्पैच'},
- {id:'K-000123',type:'किसान पर्ची',party:'सुरेश साहू',crop:'चना · देशी',weight:'18.25 क्विंटल',date:'कल, 04:35 PM',status:'जमा'}
-];
+const initialSlips:Slip[]=[];
 const money=(n:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n);
 type AuthUser = { id:string; shopId:string; name:string; email:string; role:string };
 function App(){
@@ -22,6 +18,9 @@ function App(){
  const [authUser,setAuthUser]=useState<AuthUser|null>(null);
  useEffect(()=>{let alive=true;(async()=>{try{const me=await fetch('/api/auth/me');if(me.ok){const d=await me.json();if(alive){setAuthUser(d.user);setAuthMode('ready');}return;}const sr=await fetch('/api/setup-status');const s=await sr.json();if(alive)setAuthMode(s.needsOwnerSetup?'setup':'login');}catch{if(alive)setAuthMode('login');}})();return()=>{alive=false;};},[]);
  if(authMode!=='ready'||!authUser) return <AuthGate mode={authMode==='setup'?'setup':'login'} onAuth={u=>{setAuthUser(u);setAuthMode('ready');}}/>;
+ return <Dashboard authUser={authUser}/>;
+}
+function Dashboard({authUser}:{authUser:AuthUser}){
  const [section,setSection]=useState<Section>('Overview'); const [mobileOpen,setMobileOpen]=useState(false);
  const [slips,setSlips]=useState(initialSlips); const [modal,setModal]=useState<'किसान पर्ची'|'मिलर पर्ची'|null>(null);
  const [party,setParty]=useState(''); const [crop,setCrop]=useState('धान'); const [weight,setWeight]=useState(''); const [toast,setToast]=useState('');
@@ -60,7 +59,7 @@ function App(){
 
 function AuthGate({mode,onAuth}:{mode:'setup'|'login';onAuth:(user:AuthUser)=>void}){
  const [shopName,setShopName]=useState('');const [ownerName,setOwnerName]=useState('');const [phone,setPhone]=useState('');const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
- const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const endpoint=mode==='setup'?'/api/auth/setup':'/api/auth/login';const payload=mode==='setup'?{shopName,ownerName,phone,email,password}:{email,password};const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.error||'प्रक्रिया पूरी नहीं हुई।');onAuth(d.user);}catch(e){setError(e instanceof Error?e.message:'कनेक्शन में समस्या है।');}finally{setBusy(false);}};
+ const submit=async(e:FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const endpoint=mode==='setup'?'/api/auth/setup':'/api/auth/login';const payload=mode==='setup'?{shopName,ownerName,phone,email,password}:{email,password};const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw new Error(d.error||'प्रक्रिया पूरी नहीं हुई।');onAuth(d.user);}catch(e){setError(e instanceof Error?e.message:'कनेक्शन में समस्या है।');}finally{setBusy(false);}};
  return <div className="auth-shell"><form className="auth-card" onSubmit={submit}><div className="brand-mark auth-mark"><Sprout size={24}/></div><div className="eyebrow">DIGITAL MANDI OS · SECURE WORKSPACE</div><h1>{mode==='setup'?'अपना मंडी अकाउंट बनाएँ':'वापस स्वागत है'}</h1><p>{mode==='setup'?'पहली बार दुकान और Owner login सेट करें।':'अपने कारोबार में सुरक्षित लॉगिन करें।'}</p>{mode==='setup'&&<><label>दुकान / फर्म का नाम<input required minLength={2} maxLength={100} value={shopName} onChange={e=>setShopName(e.target.value)} placeholder="Balaji Mandi"/></label><label>मालिक का नाम<input required minLength={2} maxLength={80} value={ownerName} onChange={e=>setOwnerName(e.target.value)} placeholder="आपका नाम"/></label><label>मोबाइल (वैकल्पिक)<input value={phone} onChange={e=>setPhone(e.target.value)}/></label></>}<label>ईमेल<input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com"/></label><label>पासवर्ड<input required type="password" minLength={mode==='setup'?12:1} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='setup'?'कम से कम 12 अक्षर':'पासवर्ड'}/></label>{mode==='setup'&&<small className="auth-hint">पासवर्ड कम से कम 12 अक्षरों का रखें और सुरक्षित रखें।</small>}{error&&<div className="auth-error">{error}</div>}<button className="btn-primary auth-submit" disabled={busy}>{busy?'कृपया प्रतीक्षा करें…':mode==='setup'?'Owner अकाउंट बनाएँ':'Login करें'}</button><div className="auth-foot"><ShieldCheck size={15}/> सुरक्षित लॉगिन · आपका डेटा आपके मंडी अकाउंट में</div></form></div>;
 }
 function PartyModule({type}:{type:'farmer'|'miller'}){
