@@ -17,7 +17,7 @@ export async function onRequestGet({request,env}){
  try{
   const [parties,pendingFarmer,pendingMiller,pendingCommission,recent]=await Promise.all([
    env.DB.prepare("SELECT id,name,party_type FROM parties WHERE shop_id=? AND active=1 ORDER BY name LIMIT 1000").bind(user.shopId).all(),
-   env.DB.prepare(`SELECT d.id AS deal_id,d.deal_no,d.deal_date,p.id AS party_id,pa.name AS party_name,
+   env.DB.prepare(`SELECT d.id AS deal_id,d.deal_no,d.deal_date,p.farmer_id AS party_id,pa.name AS party_name,
     c.name AS crop_name,MAX(p.balance_amount) AS outstanding,'farmer_payment' AS payment_type
     FROM purchases p JOIN deals d ON d.id=p.deal_id AND d.shop_id=p.shop_id
     JOIN parties pa ON pa.id=p.farmer_id AND pa.shop_id=p.shop_id
