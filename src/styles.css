@@ -55,3 +55,5 @@
 .commission-base-preview b{font-size:13px;color:#e1eddf}
 .commission-workspace .purchase-list{padding:20px}
 @media(max-width:700px){.commission-base-preview{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.slip-tabs button{border:0;background:transparent;color:#829187;font-size:10px;padding:14px 0;position:relative;cursor:pointer}.slip-tabs button.selected{color:#c4ed85;font-weight:700}.slip-tabs button.selected:after{content:'';height:2px;background:#b8e76b;position:absolute;bottom:-1px;left:0;right:0}.slip-tabs button:focus-visible{outline:2px solid #b8e76b;outline-offset:3px}
