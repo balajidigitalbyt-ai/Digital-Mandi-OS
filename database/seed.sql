@@ -1,0 +1,6 @@
+-- Seed the three configured core crops for each shop during onboarding.
+-- Execute with the actual shop_id once the first shop record is created.
+-- INSERT INTO crops (id, shop_id, name) VALUES
+-- ('crop-paddy', '<shop_id>', 'धान'),
+-- ('crop-wheat', '<shop_id>', 'गेहूँ'),
+-- ('crop-gram', '<shop_id>', 'चना');
