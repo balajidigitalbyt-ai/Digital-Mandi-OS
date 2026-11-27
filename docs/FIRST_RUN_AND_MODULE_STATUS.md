@@ -11,7 +11,7 @@
 - Purchase entry: creates a deal, farmer purchase, net weighment, stock lot and audit record in D1
 - Stock: reads live stock lots and available quantities from D1
 - Sales & Dispatch: records miller sale, dispatch/accepted weights and vehicle details; dispatched quantity is deducted from stock
-- Commission: miller-specific fixed + percentage rules, configurable weight/percentage bases, and immutable per-deal calculation snapshots
+- Commission: miller-specific fixed + percentage rules, configurable weight/percentage bases, immutable per-deal calculation snapshots, and balanced journal posting (Miller Commission Receivable Dr / Commission Income Cr)
 
 ## First action required from the shop owner
 
@@ -33,7 +33,7 @@ If setup has already completed, the app shows Login instead of allowing another 
 - Purchase: creates commission-model or own-trade purchase records and initial stock.
 - Stock: live available stock by lot, owner type and crop.
 - Sales & Dispatch: sells available stock to a miller and records dispatch/accepted weights.
-- Commission: saves a current rule per miller and calculates commission on commission-model sales. Fixed ₹/quintal and percentage commission can be combined. Weight basis supports dispatch, accepted or custom (with reason); percentage basis supports sale amount, purchase amount or custom amount. Each calculation stores a rule/amount/weight snapshot.
+- Commission: saves a current rule per miller and calculates commission on commission-model sales. Fixed ₹/quintal and percentage commission can be combined. Weight basis supports dispatch, accepted or custom (with reason); percentage basis supports sale amount, purchase amount or custom amount. Each calculation stores a rule/amount/weight snapshot and posts a balanced double-entry journal: debit Miller Commission Receivable (party-wise) and credit Commission Income.
 
 All connected APIs require a valid session and scope records to the signed-in user's `shop_id`.
 
@@ -59,7 +59,7 @@ All connected APIs require a valid session and scope records to the signed-in us
 
 ## Still in progress / not yet connected
 
-Payments, miller/farmer ledger balances, double-entry journal posting, dashboard rollups and persistent printable slips are not yet connected end-to-end. Commission calculations are stored separately but are not yet posted to the miller's ledger or payment balance. Do not treat a calculated commission as a posted/collected payment. The dashboard summary cards are still placeholders.
+Payments, receipt allocation, farmer/miller settlement balances, dashboard rollups and persistent printable slips are not yet connected end-to-end. Commission calculation now posts to the accounting journal as a miller receivable and commission income; it is not a payment or collection, and must not be treated as cash received. The dashboard summary cards are still placeholders.
 
 ## Safety rules
 
