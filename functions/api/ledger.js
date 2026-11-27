@@ -28,12 +28,12 @@ export async function onRequestGet({request,env}){
     FROM journal_entries je LEFT JOIN journal_lines jl ON jl.journal_entry_id=je.id
     WHERE je.shop_id=? AND je.status='posted'
     GROUP BY je.id,je.entry_no,je.entry_date,je.description
-    HAVING ABS(COALESCE(SUM(jl.debit),0)-COALESCE(SUM(jl.credit),0))>0.005 OR COUNT(jl.id)<2
-    ORDER BY je.entry_date DESC LIMIT 200`).bind(user.shopId).all(),
+    ORDER BY je.entry_date DESC LIMIT 500`).bind(user.shopId).all(),
    env.DB.prepare(`SELECT COALESCE(SUM(jl.debit),0) AS debit,COALESCE(SUM(jl.credit),0) AS credit
     FROM journal_entries je JOIN journal_lines jl ON jl.journal_entry_id=je.id
     WHERE je.shop_id=? AND je.status='posted'`).bind(user.shopId).first()
   ]);
-  return json({ok:true,accounts:accounts.results||[],parties:parties.results||[],unbalanced:unbalanced.results||[],totals:{debit:Number(totals?.debit||0),credit:Number(totals?.credit||0)}});
+  const unbalancedEntries=(unbalanced.results||[]).filter(entry=>Math.abs(Number(entry.debit||0)-Number(entry.credit||0))>0.005||Number(entry.line_count||0)<2);
+  return json({ok:true,accounts:accounts.results||[],parties:parties.results||[],unbalanced:unbalancedEntries,totals:{debit:Number(totals?.debit||0),credit:Number(totals?.credit||0)}});
  }catch(e){console.error("Ledger GET failed:",e);return json({ok:false,error:"Ledger डेटा लोड नहीं हुआ।",detail:String(e?.message||e).slice(0,400)},503);}
 }
