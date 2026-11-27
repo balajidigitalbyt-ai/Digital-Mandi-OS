@@ -33,7 +33,7 @@ export async function onRequestGet({request,env}){
     FROM journal_entries je JOIN journal_lines jl ON jl.journal_entry_id=je.id
     WHERE je.shop_id=? AND je.status='posted'`).bind(user.shopId).first()
   ]);
-  const unbalancedEntries=(unbalanced.results||[]).filter(entry=>Math.round(Math.abs(Number(entry.debit||0)-Number(entry.credit||0))*100)/100>0||Number(entry.line_count||0)<2);
+  const unbalancedEntries=(unbalanced.results||[]).filter(entry=>Math.round(Math.abs(Number(entry.debit||0)-Number(entry.credit||0))*100)/100>0);
   return json({ok:true,accounts:accounts.results||[],parties:parties.results||[],unbalanced:unbalancedEntries,totals:{debit:Number(totals?.debit||0),credit:Number(totals?.credit||0)}});
  }catch(e){console.error("Ledger GET failed:",e);return json({ok:false,error:"Ledger डेटा लोड नहीं हुआ।",detail:String(e?.message||e).slice(0,400)},503);}
 }
