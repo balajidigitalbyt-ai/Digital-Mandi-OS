@@ -88,7 +88,8 @@ export async function onRequestPost({request,env}){
     commissionPaid:num(commissionPaid?.amount),commissionBalance:Math.max(0,num(commission?.amount)-num(commissionPaid?.amount)),
     saleReceived:num(saleReceived?.amount),saleBalance:Math.max(0,num(row.gross_amount)-num(saleReceived?.amount)),notes:row.notes||""};
   }
-  const next=await env.DB.prepare("SELECT COALESCE(MAX(version),0)+1 AS version FROM slips WHERE shop_id=? AND slip_type=? AND deal_id=? AND party_id=?").bind(user.shopId,type,dealId,partyId).first();
+  snapshot.sourceId=sourceId;
+  const next=await env.DB.prepare("SELECT COALESCE(MAX(version),0)+1 AS version FROM slips WHERE shop_id=? AND slip_type=? AND json_extract(snapshot_json,'$.sourceId')=?").bind(user.shopId,type,sourceId).first();
   const version=num(next?.version)||1,id=crypto.randomUUID();
   const slipNo=(type==="farmer"?"KIS-":"MIL-")+String(documentDate||new Date().toISOString().slice(0,10)).replaceAll("-","")+"-"+id.slice(0,6).toUpperCase();
   snapshot.slipNo=slipNo;snapshot.version=version;snapshot.issuedAt=new Date().toISOString();
