@@ -68,6 +68,8 @@ export async function onRequestPost({request,env}) {
       for(const row of rowsByTable[table]){
         if(!row||typeof row!=="object"||Array.isArray(row))return json({ok:false,error:`${table} का रिकॉर्ड सही नहीं है।`},400);
         const allowed=new Set(TABLES[table]);
+        // Older backup exports may include a synthetic/legacy id on journal_lines; ignore it on restore.
+        if(table==="journal_lines")allowed.add("id");
         if(Object.keys(row).some(k=>!allowed.has(k)))return json({ok:false,error:`${table} में अनजान कॉलम मिला।`},400);
         if(table==="journal_lines"){if(!row.journal_entry_id||!row.account_id||row.debit===undefined||row.credit===undefined)return json({ok:false,error:"journal_lines में जरूरी Ledger विवरण अधूरा है।"},400);}
         else if(!row.id)return json({ok:false,error:`${table} में ID वाला रिकॉर्ड नहीं है।`},400);
