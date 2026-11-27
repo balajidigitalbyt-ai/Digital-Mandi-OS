@@ -8,6 +8,10 @@
 - First-run Owner setup and secure login endpoints
 - Tenant-scoped Farmer/Miller party API
 - Audit log entry when a party is created
+- Purchase entry: creates a deal, farmer purchase, net weighment, stock lot and audit record in D1
+- Stock: reads live stock lots and available quantities from D1
+- Sales & Dispatch: records miller sale, dispatch/accepted weights and vehicle details; dispatched quantity is deducted from stock
+- Commission: miller-specific fixed + percentage rules, configurable weight/percentage bases, and immutable per-deal calculation snapshots
 
 ## First action required from the shop owner
 
@@ -25,10 +29,13 @@ If setup has already completed, the app shows Login instead of allowing another 
 
 ## Available modules
 
-- Farmers: list and create farmer parties, including village, mobile and address.
-- Millers: list and create miller parties, including village, mobile and address.
+- Farmers and Millers: list and create tenant-scoped party records.
+- Purchase: creates commission-model or own-trade purchase records and initial stock.
+- Stock: live available stock by lot, owner type and crop.
+- Sales & Dispatch: sells available stock to a miller and records dispatch/accepted weights.
+- Commission: saves a current rule per miller and calculates commission on commission-model sales. Fixed ₹/quintal and percentage commission can be combined. Weight basis supports dispatch, accepted or custom (with reason); percentage basis supports sale amount, purchase amount or custom amount. Each calculation stores a rule/amount/weight snapshot.
 
-Both modules require a valid session and always filter by the signed-in user's `shop_id`. Party creation and its audit log are written together in a D1 batch.
+All connected APIs require a valid session and scope records to the signed-in user's `shop_id`.
 
 ## API routes
 
@@ -42,10 +49,17 @@ Both modules require a valid session and always filter by the signed-in user's `
 | GET | `/api/parties?type=farmer` | Tenant-scoped farmers |
 | GET | `/api/parties?type=miller` | Tenant-scoped millers |
 | POST | `/api/parties` | Create a farmer or miller |
+| GET | `/api/purchases` | Purchase form data and recent purchases |
+| POST | `/api/purchases` | Create purchase, deal, weighment and stock lot |
+| GET | `/api/stock` | Live stock inventory |
+| GET | `/api/sales-dispatch` | Millers, available lots and recent sales |
+| POST | `/api/sales-dispatch` | Create sale and dispatch; reduce available stock |
+| GET | `/api/commission` | Commission rules, pending deals and calculated commissions |
+| POST | `/api/commission` | Save miller rule or calculate a commission snapshot |
 
-## Not yet production-enabled
+## Still in progress / not yet connected
 
-Purchase, stock, sales/dispatch, commission calculation, payments, double-entry accounting, and printable slips are not yet connected to live D1. The dashboard therefore shows zero values instead of demo figures. Do not record real business transactions in a preview-only control until the matching database API and accounting tests are complete.
+Payments, miller/farmer ledger balances, double-entry journal posting, dashboard rollups and persistent printable slips are not yet connected end-to-end. Commission calculations are stored separately but are not yet posted to the miller's ledger or payment balance. Do not treat a calculated commission as a posted/collected payment. The dashboard summary cards are still placeholders.
 
 ## Safety rules
 
