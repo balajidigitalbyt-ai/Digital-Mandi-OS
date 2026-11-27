@@ -35,7 +35,8 @@ export async function onRequestGet({request,env}){
     LEFT JOIN deals d ON d.id=s.deal_id AND d.shop_id=s.shop_id
     WHERE s.shop_id=? ORDER BY s.created_at DESC LIMIT 500`).bind(user.shopId).all()
   ]);
-  return json({ok:true,farmerSources:farmerSources.results||[],millerSources:millerSources.results||[],slips:slips.results||[]});
+  const shop=await env.DB.prepare("SELECT name,owner_name,phone,address FROM shops WHERE id=?").bind(user.shopId).first();
+  return json({ok:true,shop:shop||{},farmerSources:farmerSources.results||[],millerSources:millerSources.results||[],slips:slips.results||[]});
  }catch(e){
   console.error("Slips GET failed:",e);
   return json({ok:false,error:"पर्ची डेटा लोड नहीं हुआ। लाइव D1 schema की जाँच जरूरी है।"},503);
