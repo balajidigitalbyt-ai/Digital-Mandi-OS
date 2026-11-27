@@ -1,5 +1,11 @@
 import { getSession, json } from "../_lib/auth.js";
 
+async function ensureAccount(env,shopId,code,name,type){
+  await env.DB.prepare("INSERT OR IGNORE INTO ledger_accounts (id,shop_id,account_code,account_name,account_type,opening_balance,balance_side,system_account,active) VALUES (?,?,?,?,?,0,?,1,1)")
+    .bind(crypto.randomUUID(),shopId,code,name,type,type==="liability"?"credit":"debit").run();
+  return env.DB.prepare("SELECT id,account_type FROM ledger_accounts WHERE shop_id=? AND account_code=? AND active=1").bind(shopId,code).first();
+}
+
 export async function onRequestGet({ request, env }) {
   const user = await getSession(request, env);
   if (!user) return json({ ok: false, error: "Login required." }, 401);
@@ -43,7 +49,7 @@ export async function onRequestPost({ request, env }) {
     return json({ok:false,error:"स्टॉक, मिलर, गाड़ी नंबर, तारीख, डिस्पैच/स्वीकृत वजन और रेट सही भरें। स्वीकृत वजन डिस्पैच वजन से अधिक नहीं हो सकता।"},400);
   }
   try {
-    const lot=await env.DB.prepare(`SELECT sl.id,sl.shop_id,sl.deal_id,sl.crop_id,sl.owner_type,sl.owner_party_id,sl.available_kg,d.deal_no
+    const lot=await env.DB.prepare(`SELECT sl.id,sl.shop_id,sl.deal_id,sl.crop_id,sl.owner_type,sl.owner_party_id,sl.available_kg,d.deal_no,d.farmer_id
       FROM stock_lots sl JOIN deals d ON d.id=sl.deal_id AND d.shop_id=?
       WHERE sl.id=? AND sl.shop_id=? AND sl.status='available'`).bind(user.shopId,lotId,user.shopId).first();
     const miller=await env.DB.prepare("SELECT id FROM parties WHERE id=? AND shop_id=? AND active=1 AND party_type IN ('miller','both')").bind(millerId,user.shopId).first();
@@ -51,17 +57,49 @@ export async function onRequestPost({ request, env }) {
     const dispatchKg=Number((dispatchQ*100).toFixed(2));
     const acceptedKg=Number((acceptedQ*100).toFixed(2));
     if(Number(lot.available_kg)<dispatchKg)return json({ok:false,error:"उपलब्ध स्टॉक से अधिक वजन डिस्पैच नहीं कर सकते।"},400);
+    if(lot.owner_type==="commission_stock"&&(!lot.owner_party_id||lot.owner_party_id!==lot.farmer_id)){
+      return json({ok:false,error:"कमीशन स्टॉक का किसान रिकॉर्ड डील से मेल नहीं खाता। बिक्री पोस्ट नहीं हुई।"},409);
+    }
     const saleId=crypto.randomUUID(),dispatchId=crypto.randomUUID();
     const amount=Number((acceptedQ*rate).toFixed(2));
     const difference=Number((dispatchQ-acceptedQ).toFixed(3));
-    const results=await env.DB.batch([
+    const statements=[
       env.DB.prepare("UPDATE stock_lots SET available_kg=available_kg-? WHERE id=? AND shop_id=? AND available_kg>=?").bind(dispatchKg,lotId,user.shopId,dispatchKg),
-      env.DB.prepare("UPDATE deals SET miller_id=? WHERE id=? AND shop_id=?").bind(millerId,lot.deal_id,user.shopId),
-      env.DB.prepare("INSERT INTO sales (id,deal_id,miller_id,crop_id,quantity_kg,rate_per_quintal,gross_amount) VALUES (?,?,?,?,?,?,?)").bind(saleId,lot.deal_id,millerId,lot.crop_id,acceptedKg,rate,amount),
-      env.DB.prepare("INSERT INTO dispatches (id,shop_id,deal_id,sale_id,miller_id,crop_id,dispatch_date,vehicle_number,driver_name,driver_mobile,dispatch_weight,accepted_weight,weight_difference,status,notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'accepted',?)").bind(dispatchId,user.shopId,lot.deal_id,saleId,millerId,lot.crop_id,date,vehicle,driver||null,driverMobile||null,dispatchQ,acceptedQ,difference,notes),
-      env.DB.prepare("INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values) VALUES (?,?,?,'create','sale',?,NULL,?)").bind(crypto.randomUUID(),user.shopId,user.id,saleId,JSON.stringify({dealNo:lot.deal_no,lotId,millerId,dispatchQ,acceptedQ,rate,amount,vehicle}))
-    ]);
-    if(!results?.[0]?.meta?.changes)return json({ok:false,error:"स्टॉक अपडेट नहीं हुआ। संभव है किसी दूसरी एंट्री में यह स्टॉक पहले ही उपयोग हो चुका हो।"},409);
+      env.DB.prepare("INSERT INTO sales (id,deal_id,miller_id,crop_id,quantity_kg,rate_per_quintal,gross_amount) SELECT ?,?,?,?,?,?,? WHERE changes()>0").bind(saleId,lot.deal_id,millerId,lot.crop_id,acceptedKg,rate,amount),
+      env.DB.prepare("UPDATE deals SET miller_id=? WHERE id=? AND shop_id=? AND EXISTS (SELECT 1 FROM sales WHERE id=?)").bind(millerId,lot.deal_id,user.shopId,saleId),
+      env.DB.prepare("INSERT INTO dispatches (id,shop_id,deal_id,sale_id,miller_id,crop_id,dispatch_date,vehicle_number,driver_name,driver_mobile,bags,dispatch_weight,accepted_weight,weight_difference,status,notes) SELECT ?,?,?,?,?,?,?,?,?,?,0,?,?,?,'accepted',? WHERE EXISTS (SELECT 1 FROM sales WHERE id=?)").bind(dispatchId,user.shopId,lot.deal_id,saleId,millerId,lot.crop_id,date,vehicle,driver||null,driverMobile||null,dispatchQ,acceptedQ,difference,notes,saleId)
+    ];
+    let commissionJournal=null;
+    if(lot.owner_type==="commission_stock"){
+      const [salesReceivable,farmerPayable]=await Promise.all([
+        ensureAccount(env,user.shopId,"1101","Miller Sales Receivable","asset"),
+        ensureAccount(env,user.shopId,"2101","Farmer Payable","liability")
+      ]);
+      if(!salesReceivable||salesReceivable.account_type!=="asset"||!farmerPayable||farmerPayable.account_type!=="liability"){
+        return json({ok:false,error:"कमीशन बिक्री के Ledger Accounts सही उपलब्ध नहीं हैं। बिक्री पोस्ट नहीं हुई।"},503);
+      }
+      const journalId=crypto.randomUUID();
+      const entryNo="JV-CMS-"+date.replaceAll("-","")+"-"+saleId.slice(0,6).toUpperCase();
+      commissionJournal={id:journalId,entryNo};
+      statements.push(
+        env.DB.prepare("INSERT INTO journal_entries (id,shop_id,entry_no,entry_date,reference_type,reference_id,description,status) SELECT ?,?,?,?,?,?,?,'posted' WHERE EXISTS (SELECT 1 FROM sales WHERE id=?)")
+          .bind(journalId,user.shopId,entryNo,date,"commission_sale",saleId,"Commission sale · Miller receivable / Farmer payable",saleId),
+        env.DB.prepare("INSERT INTO journal_lines (id,journal_entry_id,account_id,party_id,debit,credit) SELECT ?,?,?,?, ?,0 WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')")
+          .bind(crypto.randomUUID(),journalId,salesReceivable.id,millerId,amount,journalId,user.shopId),
+        env.DB.prepare("INSERT INTO journal_lines (id,journal_entry_id,account_id,party_id,debit,credit) SELECT ?,?,?,?,0,? WHERE EXISTS (SELECT 1 FROM journal_entries WHERE id=? AND shop_id=? AND status='posted')")
+          .bind(crypto.randomUUID(),journalId,farmerPayable.id,lot.owner_party_id,amount,journalId,user.shopId)
+      );
+    }
+    statements.push(env.DB.prepare("INSERT INTO audit_logs (id,shop_id,user_id,action,entity_type,entity_id,old_values,new_values) SELECT ?,?,?, 'create','sale',?,NULL,? WHERE EXISTS (SELECT 1 FROM sales WHERE id=?)")
+      .bind(crypto.randomUUID(),user.shopId,user.id,saleId,JSON.stringify({dealNo:lot.deal_no,lotId,millerId,dispatchQ,acceptedQ,rate,amount,vehicle,commissionJournal}),saleId));
+    const results=await env.DB.batch(statements);
+    if(!results?.[1]?.meta?.changes)return json({ok:false,error:"स्टॉक अपडेट नहीं हुआ। संभव है किसी दूसरी एंट्री में यह स्टॉक पहले ही उपयोग हो चुका हो। कोई बिक्री दर्ज नहीं हुई।"},409);
+    if(commissionJournal){
+      const journalIndex=4;
+      if(!results?.[journalIndex]?.meta?.changes||!results?.[journalIndex+1]?.meta?.changes||!results?.[journalIndex+2]?.meta?.changes){
+        return json({ok:false,error:"कमीशन बिक्री का Journal पूरा पोस्ट नहीं हुआ। आगे कोई नई एंट्री न करें; रिकॉर्ड की जाँच जरूरी है।"},503);
+      }
+    }
     return json({ok:true,sale:{id:saleId,quantity_kg:acceptedKg,rate_per_quintal:rate,gross_amount:amount,dispatch_weight:dispatchQ,accepted_weight:acceptedQ,weight_difference:difference}},201);
   } catch {
     return json({ok:false,error:"बिक्री सेव नहीं हुई। कोई रिकॉर्ड आधा सेव नहीं किया गया; Database schema की जाँच जरूरी है।"},503);
